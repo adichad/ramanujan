@@ -1,0 +1,6 @@
+include 'dep'
+new File( './env' ).listFiles().findAll { it.isDirectory() }.each() {
+  def prj = ":env:"+it.name
+  include prj
+}
+

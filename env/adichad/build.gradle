@@ -1,0 +1,45 @@
+apply plugin: 'scala'
+apply plugin: 'maven'
+apply plugin: 'eclipse'
+apply plugin: 'provided-base'
+
+apply from: 'gradle.properties'
+
+defaultTasks 'dist'
+
+buildscript {
+  repositories { 
+    jcenter() 
+    mavenCentral()
+  }
+
+  dependencies {
+    classpath 'com.netflix.nebula:gradle-extra-configurations-plugin:1.12.3'
+    classpath(group: 'org.jfrog.buildinfo', name: 'build-info-extractor-gradle', version: '3.0.1')
+  }
+}
+
+configurations {
+  provided {
+    dependencies.all { dep ->
+      configurations.runtime.exclude group: dep.group, module: dep.name
+    }
+  }
+  compile.extendsFrom provided
+
+  // exclusions 
+  compile.exclude group: 'org.slf4j',           module: 'slf4j-log4j12'
+  compile.exclude group: 'org.slf4j',           module: 'slf4j-log4j11'
+  compile.exclude group: 'org.slf4j',           module: 'slf4j-jdk14'
+
+  testCompile.exclude group: 'org.slf4j',       module: 'slf4j-log4j12'
+  testCompile.exclude group: 'org.slf4j',       module: 'slf4j-log4j11'
+  testCompile.exclude group: 'org.slf4j',       module: 'slf4j-jdk14'
+
+}
+
+dependencies {
+  compile    project(':')
+}
+
+
