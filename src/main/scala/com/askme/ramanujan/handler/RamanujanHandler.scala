@@ -5,6 +5,7 @@ import java.io.IOException
 import akka.actor.SupervisorStrategy.{Restart, Resume}
 import akka.actor.{Actor, OneForOneStrategy, Props}
 import com.askme.ramanujan.Configurable
+import com.askme.ramanujan.handler.kafkatest.KafkaRouter
 import com.askme.ramanujan.handler.search.RamanujanRouter
 import com.askme.ramanujan.server.RootServer.AppContext
 import com.askme.ramanujan.util.CORS
@@ -13,6 +14,7 @@ import grizzled.slf4j.Logging
 import spray.routing.Directive.pimpApply
 import spray.routing.HttpService
 
+import scala.language.postfixOps
 import scala.concurrent.duration._
 
 
@@ -33,7 +35,7 @@ class RamanujanHandler(val config: Config, val serverContext: AppContext)
       compressResponseIfRequested() {
         decompressRequest() {
           get {
-            RamanujanRouter(this)
+            RamanujanRouter(this) ~ KafkaRouter(this)
           }
         }
       }

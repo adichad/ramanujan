@@ -1,19 +1,19 @@
 package com.askme.ramanujan.handler.search
 
-import java.net.URLEncoder
 
 import akka.actor.Actor
 import com.askme.ramanujan.Configurable
-import com.askme.ramanujan.handler.message.{RamanujanResult, ErrorResponse}
-import com.askme.ramanujan.handler.search.message.{TestParams}
+import com.askme.ramanujan.handler.message.{ErrorResponse, RamanujanResult}
+import com.askme.ramanujan.handler.search.message.TestParams
 import com.askme.ramanujan.server.RootServer.AppContext
 import com.typesafe.config.Config
 import org.elasticsearch.spark._
 import org.elasticsearch.index.query.QueryBuilders._
-import org.elasticsearch.index.query.FilterBuilders._
 import grizzled.slf4j.Logging
+import org.apache.spark.rdd.RDD
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
+import org.json4s.jackson.Serialization
 
 import scala.collection.JavaConversions._
 import scala.collection.Map
@@ -29,25 +29,39 @@ class RamanujanRequestHandler(val config: Config, appContext: AppContext) extend
   val query = compact(
     JObject(
       List(
-        JField("query", parse(termQuery("Product.categorykeywordsexact", "mobile").toString)),
-        JField("_source", JArray(List(JString("LocationName"))))
+        JField("query", parse(termQuery("LocationName", "pizza").toString)),
+        JField("_source", JArray(List(JString("LocationName")))),
+        JField("size", JInt(10000))
       )
     )
   )
 
+  implicit class Jsonifier(obj: AnyRef) {
+    implicit val formats = org.json4s.DefaultFormats
+    def toJValue = parse(Serialization.write(obj))
+  }
+
+  case class RDDResult(rdd: RDD[_], searchParams: TestParams)
+
   override def receive = {
       case searchParams: TestParams =>
         try {
-
           info(query)
-          val res = sc.esRDD("askme/place", query).take(10).toList.toString()
-          info(res)
-          context.parent ! RamanujanResult(System.currentTimeMillis()-searchParams.startTime, res)
-
+          appContext.rddCache("test")(sc.esRDD("askme/place", query).cache()) ({
+            rdd: RDD[_]=>self ! RDDResult(rdd, searchParams)
+          },{
+            e: Throwable => throw e
+          })
         } catch {
           case e: Throwable =>
+            error("exception", e)
             context.parent ! ErrorResponse(e.getMessage, e)
         }
+      case rddResult: RDDResult =>
+        val res = rddResult.rdd.take(10).toJValue
+        info("Hello!: "+compact(res))
+        context.parent ! RamanujanResult(System.currentTimeMillis()-rddResult.searchParams.startTime, res)
+
   }
 
 

@@ -5,7 +5,6 @@ import java.util.{Properties, List, Map}
 import com.typesafe.config.{Config, ConfigFactory}
 import grizzled.slf4j.Logging
 import org.apache.spark.SparkConf
-import org.elasticsearch.common.settings.ImmutableSettings
 
 import scala.collection.JavaConversions.{asScalaBuffer, mapAsScalaMap}
 import scala.reflect.ClassTag
@@ -63,14 +62,6 @@ trait Configurable extends Logging {
   }
 
   protected[this] def props(part: String): Properties = props(conf(part))
-
-  protected[this] def settings(part: String) = {
-    val settings = ImmutableSettings.settingsBuilder()
-    val c = conf(part)
-    for( e <- c.entrySet() )
-      settings.put(e.getKey, c.getString(e.getKey))
-    settings.build()
-  }
 
   protected[this] def sparkConf(part: String) = {
     val c = conf(part)

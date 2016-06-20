@@ -82,6 +82,12 @@ allprojects {
     }
   }
 */
+  tasks.withType(ScalaCompile) {
+    // Use incremental compilation
+    scalaCompileOptions.useAnt = false
+    // Enable Scala warnings output
+    scalaCompileOptions.additionalParameters = ["-feature"]
+  }
 
   mainClassName = "com.askme.ramanujan.Launcher"
   shadowJar {
