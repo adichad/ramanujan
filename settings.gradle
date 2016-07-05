@@ -1,3 +1,9 @@
+/*
+	this settings.grade does nothing. It only includes projects, various projects.
+	e.g the dec project.
+	then all the env sub projects, e.g : :env:adichad
+	not sure what directly comprises projects like :env:adichad, :env:khanna, even dep
+*/
 include 'dep'
 new File( './env' ).listFiles().findAll { it.isDirectory() }.each() {
   def prj = ":env:"+it.name

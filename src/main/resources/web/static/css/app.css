@@ -1,0 +1,49 @@
+#host-input {
+  width: 80%;
+}
+#port-input {
+  width: 80%;
+}
+#user-input {
+  width: 80%;
+}
+#password-input {
+  width: 80%;
+}
+#db-input {
+  width: 80%;
+}
+#table-input {
+  width: 80%;
+}
+#bookmark-input {
+  width: 80%;
+}
+#bookmarkformat-input {
+  width: 80%;
+}
+#primarykey-input {
+  width: 80%;
+}
+#conntype-input {
+  width: 80%;
+}#text-input {
+  width: 80%;
+}
+#fullTableSchema-input {
+  width: 80%;
+}
+
+.messages > div {
+  border-bottom: solid lightgray 1px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.messages > div:first-of-type {
+  border-top: solid lightgray 1px;
+}
+
+.messages > div > .username {
+  font-weight: bold;
+}

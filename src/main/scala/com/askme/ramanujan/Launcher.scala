@@ -7,25 +7,27 @@ import com.askme.ramanujan.server.Server
 import grizzled.slf4j.Logging
 
 object Launcher extends Logging with Configurable {
-
+  debug("[DEBUG] starting the launcher . . .")
   override protected[this] val config = configure("environment", "application", "environment_defaults", "application_defaults")
-
+  debug("[DEBUG] config initialized . . .")
   def main(args: Array[String]) {
 
     try {
       // hack to make configuration parameters available in logback.xml
-      backFillSystemProperties("component.name", "log.path.current", "log.path.archive", "log.level")
-      info(string("component.name"))
+      backFillSystemProperties("component.name", "log.path.current", "log.path.archive", "log.level") // from reference.conf + environment_defaults.conf
+      info(string("component.name")) // instance.fqn <- cluster.name <- component.name+env.name
       info("Log path: " + string("log.path.current"))
-
+      debug("[DEBUG] backfilling completed . . .")
       writePID(string("daemon.pidfile"))
       if (boolean("sysout.detach")) System.out.close()
       if (boolean("syserr.detach")) System.err.close()
-
-      val servers = map[Server]("server").values.toList
-
-      closeOnExit(servers)
-      servers.foreach(_.bind)
+      debug("[DEBUG] going to initialize the rootserver . . .")
+      val servers = map[Server]("server").values.toList // map of objects of [Server], instantiated using "server" -> .values -> .toList
+      debug("[DEBUG] rootserver object has been instantiated . . .")
+      debug("[DEBUG] closing the previous running instances of the rootserver . . .")
+      closeOnExit(servers) // call the close function - called before the game starts
+      debug("[DEBUG] starting the fresh instance of the rootserver . . .")
+      servers.foreach(_.bind) // now start the servers. <rootserver>
     } catch {
       case e: Throwable =>
         error("fatal", e)
@@ -71,5 +73,4 @@ object Launcher extends Logging with Configurable {
       }
     }
   }
-
 }

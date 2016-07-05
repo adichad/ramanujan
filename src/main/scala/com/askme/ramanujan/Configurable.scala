@@ -10,8 +10,7 @@ import scala.collection.JavaConversions.{asScalaBuffer, mapAsScalaMap}
 import scala.reflect.ClassTag
 import scala.collection.JavaConversions._
 
-
-trait Configurable extends Logging {
+trait Configurable {
   protected[this] val config: Config
 
   protected[this] def conf(part: String) = config getConfig part

@@ -77,7 +77,7 @@
   </appender>
 
   <root level="${log.level}">
-    <!--appender-ref ref="STDOUT" /-->
+    <appender-ref ref="STDOUT" />
     <appender-ref ref="INFO" />
     <appender-ref ref="ERROR" />
     <appender-ref ref="DEBUG" />

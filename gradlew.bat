@@ -4,7 +4,8 @@
 @rem  Gradle startup script for Windows
 @rem
 @rem ##########################################################################
-
+@rem  All for Windows only, not a necessarily needed thing, maybe _khanna_
+@rem ##########################################################################
 @rem Set local scope for the variables with windows NT shell
 if "%OS%"=="Windows_NT" setlocal
 
