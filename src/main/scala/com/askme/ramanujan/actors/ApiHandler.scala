@@ -1,5 +1,6 @@
 package com.askme.ramanujan.actors
 
+import org.apache.spark.sql.functions.udf
 import spray.routing.HttpServiceActor
 import akka.actor.Actor
 import grizzled.slf4j.Logging
@@ -28,8 +29,22 @@ import spray.routing.authentication.UserPassAuthenticator
 import spray.routing.authentication.BasicUserContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
+import java.util.Properties
+import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.Column
+import java.sql.DriverManager
+import org.apache.spark.sql.Row
+import kafka.producer.ProducerConfig
+import kafka.producer.Producer
+import org.json4s.NoTypeHints
+import org.json4s.jackson.Serialization
+import kafka.producer.KeyedMessage
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.DataFrame
 
-class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLContext, val listener: ActorRef) extends HttpServiceActor with Actor with Logging with Configurable with CORS with Serializable{
+class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLContext, val listener: ActorRef) extends HttpServiceActor with Actor with Logging with Configurable with CORS with Serializable {
 
       case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String)
       object RequestJsonProtocol extends DefaultJsonProtocol {
@@ -37,7 +52,7 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
 	    }
 	    import RequestJsonProtocol._
 	    
-	    object UsernameEqualsPasswordAuthenticator extends UserPassAuthenticator[BasicUserContext] {
+	    object UsernameEqualsPasswordAuthenticator extends Serializable with UserPassAuthenticator[BasicUserContext] {
 
       override def apply(userPass: Option[UserPass]): Future[Option[BasicUserContext]] = {
         val basicUserContext =
@@ -136,6 +151,15 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
       }
 
       def relay(request: String) = {
+        
+        val internalHost = string("db.internal.url") // get the host from env confs - tables bookmark & status mostly
+		    val internalPort = string("db.internal.port") // get the port from env confs - tables bookmark & status mostly
+		    val internalDB = string("db.internal.dbname") // get the port from env confs - tables bookmark & status mostly
+		    val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
+		    val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
+		      	
+		    val internalURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+internalHost+":"+internalPort+"/"+internalDB) // the internal connection DB <status, bookmark, requests> etc
+        
         debug("[DEBUG] [REQUEST] [API] request received == "+request)
         case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String)
 
@@ -160,6 +184,9 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
 				val fullTableSchema = requestObject.fullTableSchema // fully qualified table schema
 				// create a datasource to connect for the above request / json / x
 				val dataSource = new DataSource(config,conntype,host,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema)
+    		
+    		var sc = SparkContext.getOrCreate(conf)
+    		var sqlContext = new SQLContext(sc);
 		    // the process stays the same - be that for DB requests or API requests
     		//val sqlActor = context.actorOf(Props(classOf[SQLActor],config,sqlContext)) // new SQL Actor
     		//val streamingActor = context.actorOf(Props(classOf[StreamingActor],config,conf,sqlContext)) // new streaming Actor
@@ -183,13 +210,274 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
 		      info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
 		  }
     	else{
+		      /*
+		       * because this Option 1 is giving a NotSerializationException
+		       * 
+		      debug("[DEBUG] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
+		      val upserter = new Upserter(internalURL, internalUser, internalPassword)
+		      PKsAffectedDF.map { x => upserter.upsert(x(0).toString(),x(1).toString(),dataSource.db,dataSource.table) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
+		      */
+		      // trying the upsert workaround here.
+		      val statusRecordsDB = sqlContext.read.format(string("db.conn.jdbc")).option("url", string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+string("db.internal.url")+"/"+string("db.internal.dbname")).option("driver",string("db.internal.driver"))
+		      .option("dbtable",string("db.internal.tables.status.name")).option("user",string("db.internal.user")).option("password",string("db.internal.password"))
+		      .load()
+		      val prop: java.util.Properties = new Properties()
+		      prop.setProperty("user",string("db.internal.user"))
+		      prop.setProperty("password", string("db.internal.password"))
+		      
+		      debug("[DEBUG] the internal db connections evoked . . .")
+      				      
+		      if(statusRecordsDB.rdd.isEmpty()){
+		        // straightaway write the PKsAffectedDF dataframe into status table, overriding it.
+		        PKsAffectedDF.write.mode(SaveMode.Overwrite).jdbc(internalURL,string("db.internal.tables.status.name"), prop)
+		      }
+		      else{
+		        val affectedPKs = PKsAffectedDF.select(string("db.internal.tables.status.cols.qualifiedName")).rdd.map(r => r(0).asInstanceOf[String]).collect()
+		        val sc = SparkContext.getOrCreate(conf)
+		        val affectedPKsBrdcst = sc.broadcast(affectedPKs)
+		        
+		        val func1a: (String => Boolean) = (arg: String) => !affectedPKsBrdcst.value.contains(arg)
+		        //val func1b: (String => Boolean) = (arg: String) => affectedPKsBrdcst.value.contains(arg)
+		        val sqlfunc1a = udf(func1a)
+		        //val sqlfunc1b = udf(func1b)
+		        val statusRecordsDB_1a = statusRecordsDB.filter(sqlfunc1a(new org.apache.spark.sql.Column(string("db.internal.tables.status.cols.qualifiedName"))))
+		        //val statusRecordsDB_1b = statusRecordsDB.filter(sqlfunc1b(new org.apache.spark.sql.Column(string("db.internal.tables.status.cols.qualifiedName"))))
+		        //statusRecordsDB_1a.write.mode(SaveMode.Overwrite).jdbc(internalURL,"chawl_a", prop)
+		        //statusRecordsDB_1b.write.mode(SaveMode.Overwrite).jdbc(internalURL,"chawl_b", prop)
+		        // upsert work-around
+		        //val statusRecordsDB_1 = statusRecordsDB.filter("$\""+string("db.internal.tables.status.cols.qualifiedName")+"\" not in PKsAffectedDF(\""+string("db.internal.tables.status.cols.qualifiedName")+"\")")
+		        //val statusRecordsDB_2 = statusRecordsDB_1.unionAll(PKsAffectedDF)
+		        //val statusRecordsDB_1 = statusRecordsDB.join(PKsAffectedDF, statusRecordsDB(string("db.internal.tables.status.cols.qualifiedName")) !== PKsAffectedDF(string("db.internal.tables.status.cols.qualifiedName")))
+		        val statusRecordsDB_2a = PKsAffectedDF.unionAll(statusRecordsDB_1a)
+		        statusRecordsDB_2a.write.mode(SaveMode.Overwrite).jdbc(internalURL,string("db.internal.tables.statustmp.name"), prop)
+		        
+		        val internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
+		        val statement = internalConnection.createStatement()
+		        val status_to_tmp_query = "ALTER TABLE "+string("db.internal.tables.status.name")+" RENAME swap_status;"
+		        val tmp_to_status_query = "ALTER TABLE "+string("db.internal.tables.statustmp.name")+" RENAME "+string("db.internal.tables.status.name")+";"
+		        val drop_swap_status_query = "drop table swap_status";
+		        statement.executeUpdate(status_to_tmp_query)
+		        statement.executeUpdate(tmp_to_status_query)
+		        statement.executeUpdate(drop_swap_status_query)
+		        //val statusRecordsDB_2b = statusRecordsDB_1b.unionAll(PKsAffectedDF)
+		        //statusRecordsDB_2b.write.mode(SaveMode.Overwrite).jdbc(internalURL,"phatuu", prop)
+		      }
+		  }
+    	/*
+    	else{
 		      debug("[DEBUG] [REQUEST] [API] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
 		      PKsAffectedDF.map { x => dataSource.upsert(x(0).toString(),x(1).toString()) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
 		  }
+		  */
+    	// INSERTING INTO KAFKA + HDFS 	
     	dataSource.updateBookMark(currBookMark)
     	
-    	dataSource.getPKs4UpdationKafka(conf,sqlContext)
-    	dataSource.getPKs4UpdationHDFS(conf,sqlContext)
+    	val db_to_query = dataSource.db
+    	val table_to_query = dataSource.table
+    	
+    	val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+					Map(
+										"driver" -> string("db.internal.driver"),
+										"url" -> (internalURL+"?user="+internalUser+"&password="+internalPassword),
+										"dbtable" -> ("(select "+string("db.internal.tables.status.cols.primarykey")+","+string("db.internal.tables.status.cols.sourceId")+" from "+string("db.internal.tables.status.name")+" where "+string("db.internal.tables.status.cols.dbname")+" in (\""+db_to_query+"\") and "+string("db.internal.tables.status.cols.dbtable")+" in (\""+table_to_query+"\") and "+string("db.internal.tables.status.cols.sourceId")+" > "+string("db.internal.tables.status.cols.kafkaTargetId")+") kafka_tmp")
+										)
+			).load()
+			// worker 1 : http://stackoverflow.com/questions/37285388/spark-scala-task-not-serializable-for-closure?rq=1
+			
+			@SerialVersionUID(100L)
+			class KafkaWrapper1(sqlContext: SQLContext, fn: (Row, SQLContext, Map[String,String], Map[String,String], Properties)  => Unit) extends Serializable {
+    	  
+    	  var dbFields:Map[String,String] = Map()
+			  dbFields += ("db" -> dataSource.db)
+			  dbFields += ("table" -> dataSource.table)
+			  dbFields += ("host" -> dataSource.host)
+			  dbFields += ("port" -> dataSource.port)
+			  dbFields += ("user" -> dataSource.user)
+			  dbFields += ("pass" -> dataSource.password)
+			  dbFields += ("conntype" -> dataSource.conntype)
+			  dbFields += ("fullTableSchema" -> dataSource.fullTableSchema)
+			  dbFields += ("bookmark" -> dataSource.bookmark)
+			  dbFields += ("bookmarkformat" -> dataSource.bookmarkformat)
+			  dbFields += ("primarykey" -> dataSource.primarykey)
+			
+			  val mysql = "mysql"//string("db.type.mysql")
+			  val postgres = "postgres"//string("db.type.postgres")
+			  val sqlserver = "sqlserver"//string("db.type.sqlserver")
+			  val jdbc = "jdbc"//string("db.conn.jdbc")
+			  
+	  		var connTypes:Map[String,String] = Map()
+		  	connTypes += ("mysql" -> mysql)
+			  connTypes += ("postgres" -> postgres)
+			  connTypes += ("sqlserver" -> sqlserver)
+			  connTypes += ("jdbc" -> jdbc)
+    	
+			  val props = new Properties()
+      	props.put("metadata.broker.list", string("sinks.kafka.brokers"))
+		  	props.put("serializer.class", string("sinks.kafka.serializer"))
+			  props.put("group.id", string("sinks.kafka.groupname"))
+			  props.put("producer.type", string("sinks.kafka.producer.type"))
+    	  
+    	  def sinkMapper(df:DataFrame): RDD[Unit] = df.map { row => fn(row,sqlContext,dbFields,connTypes,props) }
+    	}
+			
+    	val kafkaSinkFunc: (Row,SQLContext,Map[String,String],Map[String,String],Properties) => Unit = (row,sqlContext,map_db,map_conn,props) => {
+    	  
+    	  val pk = row.getString(0) // get pk from the row
+    	  val bkmk = row.getString(1) // get bookmark from row
+			  
+			  val config = new ProducerConfig(props)
+			  val producer = new Producer[String,String](config)
+			      
+			  if(conntype.contains(map_conn.get("mysql").get)){ // selecting entire rows - insertion into kafka as json and hdfs as ORC
+					val jdbcDF = sqlContext.read.format(map_conn.get("mysql").get).options(
+							Map(
+									"driver" -> conntype,
+									"url" -> (map_conn.get("jdbc").get+":"+map_conn.get("mysql").get+"://"+map_db.get("host")+":"+map_db.get("port")+"/"+map_db.get("db")+"?user="+map_db.get("user")+"&password="+map_db.get("pass")),
+									"dbtable" -> ("(select "+map_db.get("fullTableSchema")+" from "+map_db.get("table")+" where "+map_db.get("primarykey")+" = "+pk+" and "+map_db.get("bookmark")+" = "+bkmk+") kafka_tmp_ser)") // table Specific
+									)
+							).load()
+					val row_to_insert: Row = jdbcDF.first()
+					var rowMap:Map[String,String] = Map()
+					val fullTableSchemaArr = map_db.get("fullTableSchema").get.split(",")
+					for(i <- 0 until fullTableSchemaArr.length) {
+					  rowMap += (fullTableSchemaArr(i) -> row_to_insert.getString(i))  
+					} // contructing the json
+					implicit val formats = Serialization.formats(NoTypeHints)
+					val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+					//val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+					producer.send(new KeyedMessage[String,String](("[TOPIC] "+map_db.get("db").get+"_"+map_db.get("table").get),map_db.get("table").get,json_to_insert)) // topic + key + message
+					// KAFKA Over
+					//updateTargetIdsBackKafka(db,table,pk,bkmk)
+				}
+    	  /*
+    	   * for the timebeing . . .
+    	   * 
+				else if(conntype.contains(string("db.type.postgres"))){
+				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == postgres")
+					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+							Map(
+									"driver" -> conntype, // "org.postgresql.Driver"
+									"url" -> (string("db.conn.jdbc")+":"+string("db.type.postgres")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
+									"dbtable" -> ("select "+map_db.get("fullTableSchema")+" from "+table+" where "+map_db.get("primarykey")+" = "+pk+" and "+bookmark+" = "+bkmk) // table Specific
+									)
+							).load()
+							val row_to_insert: Row = jdbcDF.first()
+							debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							var rowMap:Map[String,String] = Map()
+							val fullTableSchemaArr = map_db.get("fullTableSchema").get.split(",")
+							for(i <- 0 until fullTableSchemaArr.length) {
+					      rowMap += (fullTableSchemaArr(i) -> row_to_insert.getString(i))  // rather apply preprocessing here
+					    } // constructing the json
+					    implicit val formats = Serialization.formats(NoTypeHints)
+					    val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+					    val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+					    debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					    producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
+					    debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					    // KAFKA Over
+					    updateTargetIdsBackKafka(db,table,pk,bkmk)
+					    "[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
+				}
+				else if(conntype.contains(string("db.type.sqlserver"))){
+				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == sqlserver")
+					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+							Map(
+									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+									"url" -> (string("db.conn.jdbc")+":"+string("db.type.sqlserver")+host+":"+port+";database="+db+";user="+user+";password="+password),
+									"dbtable" -> ("select "+map_db.get("fullTableSchema")+" from "+table+" where "+map_db.get("primarykey")+" = "+pk+" and "+bookmark+" = "+bkmk) // table Specific
+									)
+							).load()
+							val row_to_insert: Row = jdbcDF.first()
+							debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							var rowMap:Map[String,String] = Map()
+							val fullTableSchemaArr = map_db.get("fullTableSchema").get.split(",")
+							for(i <- 0 until fullTableSchemaArr.length) {
+					      rowMap += (fullTableSchemaArr(i) -> row_to_insert.getString(i))  
+					    }
+							implicit val formats = Serialization.formats(NoTypeHints)
+							val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+							val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+							debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+							producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
+							debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+							// KAFKA Over
+							updateTargetIdsBackKafka(db,table,pk,bkmk)
+							"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
+				}
+				else{
+				  debug("[DEBUG] [STREAMING] [KAFKA] nothing to publish . . .")
+				  // no need to send it to either of kafka or hdfs
+					// no supported DB type - return a random string with fullTableSchema
+				  val fullTableSchemaArr = map_db.get("fullTableSchema").get.split(",")
+				  var rowMap:Map[String,String] = Map()
+				  for(i <- 0 until fullTableSchemaArr.length) {
+					      rowMap += (fullTableSchemaArr(i) -> "nothing")  
+					}
+				  implicit val formats = Serialization.formats(NoTypeHints)
+				  val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+				  val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+				  // KAFKA Over
+				  updateTargetIdsBackKafka(db,table,pk,bkmk)
+				}
+				*/			
+				
+    	}
+			sc = SparkContext.getOrCreate(conf)
+			val kafkaWrapper1 = new KafkaWrapper1(sqlContext,kafkaSinkFunc)
+			kafkaWrapper1.sinkMapper(jdbcDF)
+			
+			if(jdbcDF.rdd.isEmpty()){
+								  debug("[DEBUG] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
+								  //info("no persistences done to the kafka sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
+	    }
+    	else{
+								  debug("[DEBUG] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
+  								jdbcDF.map { x => {
+  								                    //val conf = sparkConf("spark");
+  								                    //val sc=SparkContext.getOrCreate(conf);
+  								                    //val sqlContext = new SQLContext(sc);
+  								                    
+  								                    
+  								                  } 
+  								           } // kafka sink only
+		  }
+    	
+    	/*
+    	 * Commenting this approach too . . .
+    	
+    	val db_to_query = dataSource.db
+    	val table_to_query = dataSource.table
+    	val conntype_to_query = dataSource.conntype
+    	val fullTableSchema_to_query = dataSource.fullTableSchema
+    	val primarykey = dataSource.primarykey
+    	
+    	val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+								Map(
+										"driver" -> string("db.internal.driver"),
+										"url" -> (internalURL+"?user="+internalUser+"&password="+internalPassword),
+										"dbtable" -> ("(select "+string("db.internal.tables.status.cols.primarykey")+","+string("db.internal.tables.status.cols.sourceId")+" from "+string("db.internal.tables.status.name")+" where "+string("db.internal.tables.status.cols.dbname")+" in (\""+db_to_query+"\") and "+string("db.internal.tables.status.cols.dbtable")+" in (\""+table_to_query+"\") and "+string("db.internal.tables.status.cols.sourceId")+" > "+string("db.internal.tables.status.cols.kafkaTargetId")+") kafka_tmp")
+										)
+								).load()
+								
+			if(jdbcDF.rdd.isEmpty()){
+								  debug("[DEBUG] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
+								  //info("no persistences done to the kafka sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
+	    }
+    	else{
+								  debug("[DEBUG] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
+  								jdbcDF.map { x => {
+  								                    val conf = sparkConf("spark");
+  								                    val sc=SparkContext.getOrCreate(conf);
+  								                    val sqlContext = new SQLContext(sc);
+  								                    fetchFromFactTableAndSinkKafka(x,sqlContext,conntype,fullTableSchema_to_query,host,port,db,table,user,password,primarykey,bookmark)
+  								                  } 
+  								           } // kafka sink only
+		  }
+		  * 
+		  */
+    	
+    	//getPKs4UpdationKafka(conf,sqlContext)
+    	//getPKs4UpdationHDFS(conf,sqlContext)
     	
 	    /*
 	    Future {
@@ -272,4 +560,140 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
   def nothing(json: String) = {
         "Nothing to prove, no report to run !!! "+json
       }
+
+  def fetchFromFactTableAndSinkKafka(x: Row,sqlContext: SQLContext,conntype: String,ofullTableSchema: String,
+      host: String, port: String, db: String, table: String, user: String, password: String, primarykey: String, bookmark: String) : String = { // had to explicitly do that
+			  debug("[DEBUG] [STREAMING] [KAFKA] entered the row-by-row sink . . .")
+				val pk = x.getString(0) // get pk from the row
+				val bkmk = x.getString(1) // get bookmark from row
+				debug("[DEBUG] [STREAMING] [KAFKA] doing it for == "+pk)
+				
+				val props = new Properties()
+				props.put("metadata.broker.list", string("sinks.kafka.brokers"))
+				props.put("serializer.class", string("sinks.kafka.serializer"))
+			  props.put("group.id", string("sinks.kafka.groupname"))
+			  props.put("producer.type", string("sinks.kafka.producer.type"))
+			  
+			  val config = new ProducerConfig(props)
+			  val producer = new Producer[String,String](config)
+				
+				if(conntype.contains(string("db.type.mysql"))){ // selecting entire rows - insertion into kafka as json and hdfs as ORC
+				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == mysql")
+					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+							Map(
+									"driver" -> conntype,
+									"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
+									"dbtable" -> ("select "+ofullTableSchema+" from "+table+" where "+primarykey+" = "+pk+" and "+bookmark+" = "+bkmk) // table Specific
+									)
+							).load()
+					val row_to_insert: Row = jdbcDF.first()
+					debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+					var rowMap:Map[String,String] = Map()
+					val fullTableSchemaArr = ofullTableSchema.split(",")
+					for(i <- 0 until fullTableSchemaArr.length) {
+					  rowMap += (fullTableSchemaArr(i) -> row_to_insert.getString(i))  
+					} // contructing the json
+					implicit val formats = Serialization.formats(NoTypeHints)
+					val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+					val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+					debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
+					debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					// KAFKA Over
+					updateTargetIdsBackKafka(db,table,pk,bkmk)
+					"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
+				}
+				else if(conntype.contains(string("db.type.postgres"))){
+				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == postgres")
+					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+							Map(
+									"driver" -> conntype, // "org.postgresql.Driver"
+									"url" -> (string("db.conn.jdbc")+":"+string("db.type.postgres")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
+									"dbtable" -> ("select "+ofullTableSchema+" from "+table+" where "+primarykey+" = "+pk+" and "+bookmark+" = "+bkmk) // table Specific
+									)
+							).load()
+							val row_to_insert: Row = jdbcDF.first()
+							debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							var rowMap:Map[String,String] = Map()
+							val fullTableSchemaArr = ofullTableSchema.split(",")
+							for(i <- 0 until fullTableSchemaArr.length) {
+					      rowMap += (fullTableSchemaArr(i) -> row_to_insert.getString(i))  // rather apply preprocessing here
+					    } // constructing the json
+					    implicit val formats = Serialization.formats(NoTypeHints)
+					    val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+					    val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+					    debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					    producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
+					    debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					    // KAFKA Over
+					    updateTargetIdsBackKafka(db,table,pk,bkmk)
+					    "[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
+				}
+				else if(conntype.contains(string("db.type.sqlserver"))){
+				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == sqlserver")
+					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+							Map(
+									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+									"url" -> (string("db.conn.jdbc")+":"+string("db.type.sqlserver")+host+":"+port+";database="+db+";user="+user+";password="+password),
+									"dbtable" -> ("select "+ofullTableSchema+" from "+table+" where "+primarykey+" = "+pk+" and "+bookmark+" = "+bkmk) // table Specific
+									)
+							).load()
+							val row_to_insert: Row = jdbcDF.first()
+							debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							var rowMap:Map[String,String] = Map()
+							val fullTableSchemaArr = ofullTableSchema.split(",")
+							for(i <- 0 until fullTableSchemaArr.length) {
+					      rowMap += (fullTableSchemaArr(i) -> row_to_insert.getString(i))  
+					    }
+							implicit val formats = Serialization.formats(NoTypeHints)
+							val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+							val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+							debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+							producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
+							debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+							// KAFKA Over
+							updateTargetIdsBackKafka(db,table,pk,bkmk)
+							"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
+				}
+				else{
+				  debug("[DEBUG] [STREAMING] [KAFKA] nothing to publish . . .")
+				  // no need to send it to either of kafka or hdfs
+					// no supported DB type - return a random string with fullTableSchema
+				  val fullTableSchemaArr = ofullTableSchema.split(",")
+				  var rowMap:Map[String,String] = Map()
+				  for(i <- 0 until fullTableSchemaArr.length) {
+					      rowMap += (fullTableSchemaArr(i) -> "nothing")  
+					}
+				  implicit val formats = Serialization.formats(NoTypeHints)
+				  val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
+				  val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
+				  // KAFKA Over
+				  updateTargetIdsBackKafka(db,table,pk,bkmk)
+				  "updations EXITTED successfully"
+				}
+			}
+
+  def preprocess(fetchFromFactTableString: String) = { // for all kinds of preprocessing - left empty
+      debug("[DEBUG] [STREAMING] preprocessing func called . . .")
+		  fetchFromFactTableString
+		}
+
+  def updateTargetIdsBackKafka(db: String, table: String, pk: String, bkmrk: String) = {
+    
+      val internalHost = string("db.internal.url") // get the host from env confs - tables bookmark & status mostly
+		  val internalPort = string("db.internal.port") // get the port from env confs - tables bookmark & status mostly
+		  val internalDB = string("db.internal.dbname") // get the port from env confs - tables bookmark & status mostly
+		  val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
+		  val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
+		      	
+		  val internalURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+internalHost+":"+internalPort+"/"+internalDB) // the internal connection DB <status, bookmark, requests> etc
+
+      debug("[DEBUG] [STREAMING] [KAFKA] update the targets back . . .")
+      val internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
+		  val statement = internalConnection.createStatement()
+			val updateTargetQuery = "UPDATE "+string("db.internal.tables.status.name")+" SET "+string("db.internal.tables.status.cols.kafkaTargetId")+"="+string("db.internal.tables.status.cols.sourceId")+" where "+string("db.internal.tables.status.cols.primarykey")+"="+pk+" and "+(string("db.internal.tables.status.cols.sourceId"))+"="+bkmrk+";"
+		  statement.executeQuery(updateTargetQuery) // perfectly fine if another upsert might have had happened in the meanwhile
+		  debug("[DEBUG] [STREAMING] [KAFKA] updated == "+pk+"_"+bkmrk)
+		  internalConnection.close()	
+  }
 }

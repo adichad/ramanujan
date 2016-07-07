@@ -23,6 +23,11 @@ import spray.json.DefaultJsonProtocol
 import spray.json._
 import java.util.concurrent.Executors
 import com.askme.ramanujan.util.DataSource
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.mllib.util.Saveable
+import org.apache.spark.sql.SaveMode
+import java.util.Properties
+import org.apache.spark.sql.functions.udf
 
 class RootServer(val config: Config) extends Logging with Configurable with Server with Serializable {
     // normal sparkContext - initialize it from conf.spark
@@ -82,16 +87,61 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 	    debug("[DEBUG] the previous bookmark == "+prevBookMark)
 	    var currBookMark = dataSource.getCurrBookMark(sqlContext)
 	    debug("[DEBUG] the current bookmark == "+currBookMark)
-	    var PKsAffectedDF = dataSource.getAffectedPKs(sqlContext,prevBookMark,currBookMark)
+	    var PKsAffectedDF: DataFrame = dataSource.getAffectedPKs(sqlContext,prevBookMark,currBookMark)
 	    debug("[DEBUG] the count of PKs returned == "+PKsAffectedDF.count())
 	    if(PKsAffectedDF.rdd.isEmpty()){
 		      info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
 		  }
 		  else{
-		      
+		      /*
+		       * because this Option 1 is giving a NotSerializationException
+		       * 
 		      debug("[DEBUG] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
 		      val upserter = new Upserter(internalURL, internalUser, internalPassword)
 		      PKsAffectedDF.map { x => upserter.upsert(x(0).toString(),x(1).toString(),dataSource.db,dataSource.table) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
+		      */
+		      // trying the upsert workaround here.
+		      val statusRecordsDB = sqlContext.read.format(string("db.conn.jdbc")).option("url", string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+string("db.internal.url")+"/"+string("db.internal.dbname")).option("driver",string("db.internal.driver"))
+		      .option("dbtable",string("db.internal.tables.status.name")).option("user",string("db.internal.user")).option("password",string("db.internal.password"))
+		      .load()
+		      val prop: java.util.Properties = new Properties()
+		      prop.setProperty("user",string("db.internal.user"))
+		      prop.setProperty("password", string("db.internal.password"))
+		      if(statusRecordsDB.rdd.isEmpty()){
+		        // straightaway write the PKsAffectedDF dataframe into status table, overriding it.
+		        PKsAffectedDF.write.mode(SaveMode.Overwrite).jdbc(internalURL,string("db.internal.tables.status.name"), prop)
+		      }
+		      else{
+		        val affectedPKs = PKsAffectedDF.select(string("db.internal.tables.status.cols.qualifiedName")).rdd.map(r => r(0).asInstanceOf[String]).collect()
+		        val sc = SparkContext.getOrCreate(conf)
+		        val affectedPKsBrdcst = sc.broadcast(affectedPKs)
+		        
+		        val func1a: (String => Boolean) = (arg: String) => !affectedPKsBrdcst.value.contains(arg)
+		        //val func1b: (String => Boolean) = (arg: String) => affectedPKsBrdcst.value.contains(arg)
+		        val sqlfunc1a = udf(func1a)
+		        //val sqlfunc1b = udf(func1b)
+		        val statusRecordsDB_1a = statusRecordsDB.filter(sqlfunc1a(new org.apache.spark.sql.Column(string("db.internal.tables.status.cols.qualifiedName"))))
+		        //val statusRecordsDB_1b = statusRecordsDB.filter(sqlfunc1b(new org.apache.spark.sql.Column(string("db.internal.tables.status.cols.qualifiedName"))))
+		        //statusRecordsDB_1a.write.mode(SaveMode.Overwrite).jdbc(internalURL,"chawl_a", prop)
+		        //statusRecordsDB_1b.write.mode(SaveMode.Overwrite).jdbc(internalURL,"chawl_b", prop)
+		        // upsert work-around
+		        //val statusRecordsDB_1 = statusRecordsDB.filter("$\""+string("db.internal.tables.status.cols.qualifiedName")+"\" not in PKsAffectedDF(\""+string("db.internal.tables.status.cols.qualifiedName")+"\")")
+		        //val statusRecordsDB_2 = statusRecordsDB_1.unionAll(PKsAffectedDF)
+		        //val statusRecordsDB_1 = statusRecordsDB.join(PKsAffectedDF, statusRecordsDB(string("db.internal.tables.status.cols.qualifiedName")) !== PKsAffectedDF(string("db.internal.tables.status.cols.qualifiedName")))
+		        val statusRecordsDB_2a = PKsAffectedDF.unionAll(statusRecordsDB_1a)
+		        statusRecordsDB_2a.write.mode(SaveMode.Overwrite).jdbc(internalURL,string("db.internal.tables.statustmp.name"), prop)
+		        
+		        val internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
+		        val statement = internalConnection.createStatement()
+		        val status_to_tmp_query = "ALTER TABLE "+string("db.internal.tables.status.name")+" RENAME swap_status;"
+		        val tmp_to_status_query = "ALTER TABLE "+string("db.internal.tables.statustmp.name")+" RENAME "+string("db.internal.tables.status.name")+";"
+		        val drop_swap_status_query = "drop table swap_status";
+		        statement.executeUpdate(status_to_tmp_query)
+		        statement.executeUpdate(tmp_to_status_query)
+		        statement.executeUpdate(drop_swap_status_query)
+		        //val statusRecordsDB_2b = statusRecordsDB_1b.unionAll(PKsAffectedDF)
+		        //statusRecordsDB_2b.write.mode(SaveMode.Overwrite).jdbc(internalURL,"phatuu", prop)
+		      }
 		  }
 		  debug("[DEBUG] updating the current bookmark for this db + table into BOOKMARKS table . . .")
 		  dataSource.updateBookMark(currBookMark)
