@@ -43,8 +43,11 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.DataFrame
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.KafkaProducer
+import scala.collection.mutable.HashMap
 
-class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLContext, val listener: ActorRef) extends HttpServiceActor with Actor with Logging with Configurable with CORS with Serializable {
+class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLContext) extends HttpServiceActor with Actor with Logging with Configurable with CORS with Serializable {
 
       case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String)
       object RequestJsonProtocol extends DefaultJsonProtocol {
@@ -89,61 +92,6 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
 	        )
 	        )~
 	        getFromResourceDirectory("web/static")
-	      /*
-	           post{
-            pathPrefix("\""+string("handler.baseurl")+"\"" / "\""+string("handler.request")+"\"")(
-                  rawJson // take rawJson Only, no need for Entity[as.***] things
-	                {
-	                  json => 
-	                  complete {
-	                     relay(json) // convert this json into a requestobject and then datasource and then process it and also put in DB requests
-	                     persistInDB(json) // dont know ; nature should be void only
-	                  }
-	                }
-           )
-        }~
-        get{
-          pathPrefix(string("handler.baseurl")) {
-            compressResponse() {
-              getFromResourceDirectory("web/static")
-            }
-          }~
-          pathPrefix(string("handler.report")){
-	          anyParam('report.as[String]){report =>
-                     complete {
-                       getReport(conf,sqlContext,report) // assuming that HDFS locations and tables are all Fine ! HDFS locs are always main table + partitionID
-                     }
-	              }
-	        }
-        }
-	      get{
-	        pathPrefix(string("handler.report"))(
-                 anyParam('report.as[String]){report =>
-                     complete {
-                       getReport(conf,sqlContext,report) // assuming that HDFS locations and tables are all Fine ! HDFS locs are always main table + partitionID
-                     }
-	              }
-            )
-	      }
-	      get{
-          authenticate(BasicAuth(string("handler.appname")))(user => // get rid of these errors somehow + BasicAuth
-            path(string("handler.baseurl"))( // meaning the default path, as in the first , very first thing that gets served over
-                getFromResource(string("handler.index.html"))~
-                (
-                   getFromResourceDirectory("web/static")   
-                )
-            )~
-            pathPrefix(string("handler.report"))(
-                 anyParam('report.as[String]){report =>
-                     complete {
-                       getReport(conf,sqlContext,report) // assuming that HDFS locations and tables are all Fine ! HDFS locs are always main table + partitionID
-                     }
-	              }
-            )
-         )
-	      }
-	      * 
-	      */
 	      )
 	    }
       override def postStop = { // do not know what for . . .
@@ -187,12 +135,7 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
     		
     		var sc = SparkContext.getOrCreate(conf)
     		var sqlContext = new SQLContext(sc);
-		    // the process stays the same - be that for DB requests or API requests
-    		//val sqlActor = context.actorOf(Props(classOf[SQLActor],config,sqlContext)) // new SQL Actor
-    		//val streamingActor = context.actorOf(Props(classOf[StreamingActor],config,conf,sqlContext)) // new streaming Actor
-		    //sqlActor ! new SQL(config,dataSource)
-		    //streamingActor ! new Streaming(config,dataSource)
-		    //listener ! "Having scheduled actors / workers  for : "+dataSource.db+" =and= "+dataSource.table
+		    
     		debug("[DEBUG] [REQUEST] [API] the dataSource formed == "+dataSource.toString())
     		import scala.concurrent._ // brute force imported
     	val numberOfCPUs = sys.runtime.availableProcessors() // brute force imported
@@ -209,14 +152,33 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
 	    if(PKsAffectedDF.rdd.isEmpty()){
 		      info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
 		  }
+    	val PKsAffectedDF_json = PKsAffectedDF.toJSON
+    	
+    	PKsAffectedDF_json.foreachPartition { partitionOfRecords => {
+    	    var props = new Properties()
+    	    props.put("metadata.broker.list", "kafka01.production.askmebazaar.com:9092,kafka02.production.askmebazaar.com:9092,kafka03.production.askmebazaar.com:9092")
+		  	  props.put("serializer.class", "kafka.serializer.StringEncoder")
+			    props.put("group.id", string("ramanujan"))
+			    props.put("producer.type", string("async"))
+    	    
+			    val producer = new KafkaProducer[String,String](props)
+			    
+			    partitionOfRecords.foreach
+                {
+                    case x:String=>{
+                        println(x)
+
+                        val message=new ProducerRecord[String, String]("[TOPIC] "+db+"_"+table,db,x) //("output",null,x)
+                        producer.send(message)
+                    }
+          }
+			    
+    	  }
+    	}
+    	/*
+    	 * The status table upsert thing ignored.
+    	 * 
     	else{
-		      /*
-		       * because this Option 1 is giving a NotSerializationException
-		       * 
-		      debug("[DEBUG] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
-		      val upserter = new Upserter(internalURL, internalUser, internalPassword)
-		      PKsAffectedDF.map { x => upserter.upsert(x(0).toString(),x(1).toString(),dataSource.db,dataSource.table) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
-		      */
 		      // trying the upsert workaround here.
 		      val statusRecordsDB = sqlContext.read.format(string("db.conn.jdbc")).option("url", string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+string("db.internal.url")+"/"+string("db.internal.dbname")).option("driver",string("db.internal.driver"))
 		      .option("dbtable",string("db.internal.tables.status.name")).option("user",string("db.internal.user")).option("password",string("db.internal.password"))
@@ -241,13 +203,6 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
 		        val sqlfunc1a = udf(func1a)
 		        //val sqlfunc1b = udf(func1b)
 		        val statusRecordsDB_1a = statusRecordsDB.filter(sqlfunc1a(new org.apache.spark.sql.Column(string("db.internal.tables.status.cols.qualifiedName"))))
-		        //val statusRecordsDB_1b = statusRecordsDB.filter(sqlfunc1b(new org.apache.spark.sql.Column(string("db.internal.tables.status.cols.qualifiedName"))))
-		        //statusRecordsDB_1a.write.mode(SaveMode.Overwrite).jdbc(internalURL,"chawl_a", prop)
-		        //statusRecordsDB_1b.write.mode(SaveMode.Overwrite).jdbc(internalURL,"chawl_b", prop)
-		        // upsert work-around
-		        //val statusRecordsDB_1 = statusRecordsDB.filter("$\""+string("db.internal.tables.status.cols.qualifiedName")+"\" not in PKsAffectedDF(\""+string("db.internal.tables.status.cols.qualifiedName")+"\")")
-		        //val statusRecordsDB_2 = statusRecordsDB_1.unionAll(PKsAffectedDF)
-		        //val statusRecordsDB_1 = statusRecordsDB.join(PKsAffectedDF, statusRecordsDB(string("db.internal.tables.status.cols.qualifiedName")) !== PKsAffectedDF(string("db.internal.tables.status.cols.qualifiedName")))
 		        val statusRecordsDB_2a = PKsAffectedDF.unionAll(statusRecordsDB_1a)
 		        statusRecordsDB_2a.write.mode(SaveMode.Overwrite).jdbc(internalURL,string("db.internal.tables.statustmp.name"), prop)
 		        
@@ -259,17 +214,13 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
 		        statement.executeUpdate(status_to_tmp_query)
 		        statement.executeUpdate(tmp_to_status_query)
 		        statement.executeUpdate(drop_swap_status_query)
-		        //val statusRecordsDB_2b = statusRecordsDB_1b.unionAll(PKsAffectedDF)
-		        //statusRecordsDB_2b.write.mode(SaveMode.Overwrite).jdbc(internalURL,"phatuu", prop)
 		      }
 		  }
-    	/*
-    	else{
-		      debug("[DEBUG] [REQUEST] [API] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
-		      PKsAffectedDF.map { x => dataSource.upsert(x(0).toString(),x(1).toString()) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
-		  }
+		  *
+		  * straightaway dumping them into the sinks .. .. .. 
 		  */
     	// INSERTING INTO KAFKA + HDFS 	
+    	/*
     	dataSource.updateBookMark(currBookMark)
     	
     	val db_to_query = dataSource.db
@@ -441,7 +392,7 @@ class ApiHandler(val config: Config, val conf: SparkConf, val sqlContext: SQLCon
   								                  } 
   								           } // kafka sink only
 		  }
-    	
+    	*/
     	/*
     	 * Commenting this approach too . . .
     	

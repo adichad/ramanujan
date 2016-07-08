@@ -40,11 +40,11 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 		info("creating the actor system == "+string("actorSystem.name"))
 	  private implicit val pipelineSystem = ActorSystem(string("actorSystem.name"))
 	  // the listener, an option sys log class basically - one listener only
-	  info("creating the listener actor == "+string("actorSystem.actors.listener"))
-		val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener"))
+	  //info("creating the listener actor == "+string("actorSystem.actors.listener"))
+		//val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener"))
 		// the master class
-		info("creating the master actor == "+string("actorSystem.actors.master"))
-		val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
+		//info("creating the master actor == "+string("actorSystem.actors.master"))
+		//val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
 		// take a table in - completely? 
 		/*
 		 * COMMENTING THE GENERAL SPARK SQL APPROACH - USE A DB CONN INSTEAD.
@@ -54,7 +54,7 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 		.load()
 		*   
 		*/
-		debug("[DEBUG] the internal db connections evoked . . .")
+		debug("[DEBUG] invoking the internal db connections . . .")
 		val internalHost = string("db.internal.url") // get the host from env confs - tables bookmark & status mostly
 		val internalPort = string("db.internal.port") // get the port from env confs - tables bookmark & status mostly
 		val internalDB = string("db.internal.dbname") // get the port from env confs - tables bookmark & status mostly
@@ -67,13 +67,16 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 		debug("[DEBUG] the initial internal db connection invoked . . .")
 		val statement = connection.createStatement()
 		// get the "0" status requests - them all basically
-		debug("[DEBUG] [Requests table query] SELECT * FROM "+string("db.internal.tables.requests.name")+" WHERE "+string("db.internal.tables.requests.cols.status")+" in (\""+string("db.internal.tables.requests.defs.defaultStatusVal")+"\")")
+		debug("[DEBUG] [REQUESTS TABLE QUERY] SELECT * FROM "+string("db.internal.tables.requests.name")+" WHERE "+string("db.internal.tables.requests.cols.status")+" in (\""+string("db.internal.tables.requests.defs.defaultStatusVal")+"\")")
 		val resultSet = statement.executeQuery("SELECT * FROM "+string("db.internal.tables.requests.name")+" WHERE "+string("db.internal.tables.requests.cols.status")+" in (\""+string("db.internal.tables.requests.defs.defaultStatusVal")+"\")")
 		
-		while(resultSet.next()){
+		while(resultSet.next()){ // processing the tables {requests} one by one. . .
 		  val processDate = resultSet.getString(string("db.internal.tables.requests.cols.processDate"))
 		  val request = resultSet.getString(string("db.internal.tables.requests.cols.request"))
 		  val status = resultSet.getString(string("db.internal.tables.requests.cols.status"))
+		  val host = resultSet.getString(string("db.internal.tables.requests.cols.host"))
+      val dbname = resultSet.getString(string("db.internal.tables.requests.cols.dbname"))
+      val dbtable = resultSet.getString(string("db.internal.tables.requests.cols.dbtable"))
 		  debug("[DEBUG] the table as a request == "+request)
 		  val dataSource = transform(request)
 		  import scala.concurrent._ // brute force imported
@@ -208,7 +211,7 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 		//}
 		// the init process i.e that reads from the db is complete
 		debug("[DEBUG] starting the api service actor . . .")
-		private val api = pipelineSystem.actorOf(Props(classOf[ApiHandler],config,conf,sqlContext,listener), name = string("actorSystem.actors.service"))
+		private val api = pipelineSystem.actorOf(Props(classOf[ApiHandler],config,conf,sqlContext), name = string("actorSystem.actors.service"))
 		private implicit val timeout = Timeout(Duration.apply(int("handler.timeout.scalar"), string("handler.timeout.unit")))//from root.server
     debug("[DEBUG] on for the transport IO(Http) Actor . . .")
 		private val transport = IO(Http)
