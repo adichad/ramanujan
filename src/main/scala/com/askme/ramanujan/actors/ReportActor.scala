@@ -4,8 +4,17 @@ import akka.actor.Actor
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.SparkConf
+import com.typesafe.config.Config
+import com.askme.ramanujan.Configurable
+import org.apache.log4j.Logger
 
-class ReportActor(conf: SparkConf,sqlContext: SQLContext) extends Actor with Serializable{
+class ReportActor(val config: Config,val sqlContext: SQLContext) extends Actor with Configurable with Serializable{
+  
+  object Holder extends Serializable {      
+     @transient lazy val log = Logger.getLogger(getClass.getName)    
+  }
+  
+  val conf = sparkConf("spark")
   val sc = SparkContext.getOrCreate(conf)
   def receive = {
     case "none" => nothing(sc,"none")
@@ -13,7 +22,7 @@ class ReportActor(conf: SparkConf,sqlContext: SQLContext) extends Actor with Ser
   }
 
   def nothing(sc: SparkContext,json: String) = {
-    "Nothing to prove, no report to run !!! "+json
+    Holder.log.info("Nothing to prove, no report to run !!! "+json)
   }
 
   def getOmnitureReport(sc: SparkContext) = {

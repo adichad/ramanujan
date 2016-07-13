@@ -1,5 +1,4 @@
 package com.askme.ramanujan.server
-
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.Row
@@ -28,8 +27,16 @@ import org.apache.spark.mllib.util.Saveable
 import org.apache.spark.sql.SaveMode
 import java.util.Properties
 import org.apache.spark.sql.functions.udf
+import org.apache.log4j.Logger
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerRecord
 
-class RootServer(val config: Config) extends Logging with Configurable with Server with Serializable {
+class RootServer(val config: Config) extends Configurable with Server with Logging with Serializable {
+  
+    object Holder extends Serializable {      
+     @transient lazy val log = Logger.getLogger(getClass.getName)    
+    }
+  
     // normal sparkContext - initialize it from conf.spark
     debug("[DEBUG] initialize the conf for spark and the spark context . . .")
 		val conf = sparkConf("spark")
@@ -40,11 +47,11 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 		info("creating the actor system == "+string("actorSystem.name"))
 	  private implicit val pipelineSystem = ActorSystem(string("actorSystem.name"))
 	  // the listener, an option sys log class basically - one listener only
-	  //info("creating the listener actor == "+string("actorSystem.actors.listener"))
-		//val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener"))
+	  info("creating the listener actor == "+string("actorSystem.actors.listener"))
+		val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener"))
 		// the master class
-		//info("creating the master actor == "+string("actorSystem.actors.master"))
-		//val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
+		info("creating the master actor == "+string("actorSystem.actors.master"))
+		val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
 		// take a table in - completely? 
 		/*
 		 * COMMENTING THE GENERAL SPARK SQL APPROACH - USE A DB CONN INSTEAD.
@@ -88,18 +95,102 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 	    debug("[DEBUG] obtaining the previous, the current and the affected PKs")
 	    var prevBookMark = dataSource.getPrevBookMark()
 	    debug("[DEBUG] the previous bookmark == "+prevBookMark)
-	    var currBookMark = dataSource.getCurrBookMark(sqlContext)
+	    var currBookMark = dataSource.getCurrBookMark()
 	    debug("[DEBUG] the current bookmark == "+currBookMark)
-	    var PKsAffectedDF: DataFrame = dataSource.getAffectedPKs(sqlContext,prevBookMark,currBookMark)
+	    var PKsAffectedDF: DataFrame = dataSource.getAffectedPKs(prevBookMark,currBookMark)
 	    debug("[DEBUG] the count of PKs returned == "+PKsAffectedDF.count())
 	    if(PKsAffectedDF.rdd.isEmpty()){
 		      info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
 		  }
+		  // maintaining partitions by timestamp only, as of now. . .(atleast)
+		  def shortenTS: (String => String) = (ts: String) => {
+		    "dt="+ts.replaceAll(" ", "").substring(0, 10) // 10 digit partition size
+		  }
+		  import org.apache.spark.sql.functions._
+		  val partitionColFunc = udf(shortenTS)//udf(shortenTS).apply(new org.apache.spark.sql.Column(processDate))
+		  val PKsAffectedDF_partition = PKsAffectedDF.withColumn("TSpartitionKey", partitionColFunc(col(dataSource.bookmark)))	// extra column added
+		  /*
+		  import sqlContext.implicits._
+		  val keys = PKsAffectedDF_partition.select("TSpartitionKey").distinct.collect.flatMap(_.toSeq)
+      val byPartitionArray = keys.map(key => PKsAffectedDF_partition.where($"TSpartitionKey" <=> key)) // Array Of DataFrames
+		  
+      for(i <- 0 to (keys.length - 1)) {
+        val key_ = keys(i).toString() // get part key
+        val df_ = byPartitionArray(i) // get part df
+        // hdfs://<host>:<port>/user/home/cloudera/cm_api.py <host> is Hadoop NameNode host and the <port> port number of Hadoop NameNode, 50070 
+        // s3a://<<ACCESS_KEY>>:<<SECRET_KEY>>@<<BUCKET>>/<<FOLDER>>/<<FILE>>
+        // http://www.infoobjects.com/different-ways-of-setting-aws-credentials-in-spark/ https://www.supergloo.com/fieldnotes/apache-spark-amazon-s3-examples-of-text-files/
+        val hdfspath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/"+dbname+"_"+dbtable+"/"+key_
+        val hconf = sc.hadoopConfiguration
+        hconf.set("fs.default.name", "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port"));
+        val hdfs = org.apache.hadoop.fs.FileSystem.get(hconf)
+        val partitionExistsBefore = hdfs.exists(new org.apache.hadoop.fs.Path(hdfspath))
+        
+        if(partitionExistsBefore) {
+          try{
+          debug("[DEBUG] [HDFS] [DUMP] The path was present before == "+hdfspath)
+          val partitionb4df = sqlContext.read.parquet(hdfspath).toDF((dataSource.fullTableSchema+",TSpartitionKey").split(',') : _*) //(dataSource.fullTableSchema)
+          //val partitionb4df = sc.textFile(hdfspath+"part-r-").toDF((dataSource.fullTableSchema+",TSpartitionKey").split(',') : _*) //("hdfs://quickstart.cloudera:8020/user/cloudera/README.md")
+          
+          val partitionPopulationRecordsDB = partitionb4df.unionAll(df_)
+          //hdfs.delete(new org.apache.hadoop.fs.Path(hdfspath), true)
+          partitionPopulationRecordsDB.write.mode(SaveMode.Overwrite).parquet(hdfspath)
+          debug("[HDFS] UPSERT #########$$$$$$$$$$$$$$$$$$$############ UPSERTED ##$$$$$$$$$$$######"+key_)
+          }catch {
+            case _ : Throwable => debug("[HDFS] UPSERT ########################################## CULPRIT ############################"+key_)
+          }
+          
+        }
+        else{
+          debug("[DEBUG] [HDFS] [DUMP] The path was present before == "+hdfspath)
+          df_.write.mode(SaveMode.Overwrite).parquet(hdfspath) //.save(hdfspath)  
+        }
+      }
+		  */
+		  val servers = string("sinks.kafka.bootstrap.servers")
+		  val brokers = string("sinks.kafka.metadata.brokers.list")
+		  val group = string("sinks.kafka.group.id")
+		  val producertype = string("sinks.kafka.producer.type")
+		  val keyserial = string("sinks.kafka.key.serializer")
+		  val value = string("sinks.kafka.value.serializer")
+		  val topicCreateEnable = string("sinks.kafka.auto.create.topics.enable") // "true"
+      
+		  val PKsAffectedDF_json = PKsAffectedDF_partition.toJSON
+		  //could also use the much elegant broadcast the conneksion approach
+			//http://allegro.tech/2015/08/spark-kafka-integration.html   
+    	PKsAffectedDF_json.foreachPartition { partitionOfRecords => {
+    	    var props = new Properties()
+    	    
+    	    
+    	    
+    	    props.put("bootstrap.servers", "kafka01.production.askmebazaar.com:9092,kafka02.production.askmebazaar.com:9092,kafka03.production.askmebazaar.com:9092")
+		  	  //props.put("metadata.broker.list", "localhost:9092")//"kafka01.production.askmebazaar.com:2181,kafka02.production.askmebazaar.com:2181,kafka03.production.askmebazaar.com:2181")
+			    //props.put("group.id", "ramanujan")//"ramanujan")
+			    //props.put("producer.type", "async")//"async")
+			    props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")//"org.apache.kafka.common.serialization.StringSerializer")
+			    props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")//"org.apache.kafka.common.serialization.StringSerializer")
+			    props.put("request.required.acks", "1")
+			    props.put("auto.create.topics.enable","true")
+			    //props.put("block.on.buffer.full","false")
+			    //props.put("advertised.host.name","localhost")
+			    val producer = new KafkaProducer[String,String](props)
+			    partitionOfRecords.foreach
+                {
+                    case x:String=>{
+                        val message=new ProducerRecord[String, String]("TOPIC1_"+dbname+"_"+dbtable,dbname,x)
+                        producer.send(message).get();
+                    }
+                }
+    	    producer.close()
+    	  }
+    	}
+		  
+		  /*
 		  else{
 		      /*
 		       * because this Option 1 is giving a NotSerializationException
 		       * 
-		      debug("[DEBUG] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
+		      //Holder.log.debug("[DEBUG] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
 		      val upserter = new Upserter(internalURL, internalUser, internalPassword)
 		      PKsAffectedDF.map { x => upserter.upsert(x(0).toString(),x(1).toString(),dataSource.db,dataSource.table) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
 		      */
@@ -146,11 +237,13 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 		        //statusRecordsDB_2b.write.mode(SaveMode.Overwrite).jdbc(internalURL,"phatuu", prop)
 		      }
 		  }
+		  * 
+		  */
 		  debug("[DEBUG] updating the current bookmark for this db + table into BOOKMARKS table . . .")
 		  dataSource.updateBookMark(currBookMark)
 		  
-		  dataSource.getPKs4UpdationKafka(conf,sqlContext)
-		  dataSource.getPKs4UpdationHDFS(conf,sqlContext)
+		  //dataSource.getPKs4UpdationKafka(conf,sqlContext)
+		  //dataSource.getPKs4UpdationHDFS(conf,sqlContext)
 		  
 	    /*
 	     * Getting rid of the futures too, for the time being . . .
@@ -163,70 +256,70 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 		 		* 4. upsert the things from 3.
 		 		* 5. current offset is appended to the bookmark table
 				*/
-		    debug("[DEBUG] doing the SQL-SQL flow for == "+dataSource.db+"_"+dataSource.table)
-		    debug("[DEBUG] obtaining the previous, the current and the affected PKs")
+		    //Holder.log.debug("[DEBUG] doing the SQL-SQL flow for == "+dataSource.db+"_"+dataSource.table)
+		    //Holder.log.debug("[DEBUG] obtaining the previous, the current and the affected PKs")
         var prevBookMark = dataSource.getPrevBookMark() // get the previous bookmark - key,max(autoincr.) group by key filter key -> bookmark / ts | db.internal.tables.bookmarks.defs.defaultBookMarkValue for first time
-		    debug("[DEBUG] the previous bookmark == "+prevBookMark)
+		    //Holder.log.debug("[DEBUG] the previous bookmark == "+prevBookMark)
         var currBookMark = dataSource.getCurrBookMark(sqlContext) // get the latest / maximum bookmark / ts | db.internal.tables.bookmarks.defs.defaultBookMarkValue for first time
-		    debug("[DEBUG] the current bookmark == "+currBookMark)
+		    //Holder.log.debug("[DEBUG] the current bookmark == "+currBookMark)
         var PKsAffectedDF = dataSource.getAffectedPKs(sqlContext,prevBookMark,currBookMark) // distinct PKs and max(timestamp) + WHERE clause | same as PKs, timestamp if not a log table, and PKs / timestamp otherwise | could be empty also
-		    debug("[DEBUG] the count of PKs returned == "+PKsAffectedDF.count())
+		    //Holder.log.debug("[DEBUG] the count of PKs returned == "+PKsAffectedDF.count())
         if(PKsAffectedDF.rdd.isEmpty()){
-		      info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
+		      //Holder.log.info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
 		    }
 		    else{
-		      debug("[DEBUG] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
+		      //Holder.log.debug("[DEBUG] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
 		      PKsAffectedDF.map { x => dataSource.upsert(x(0).toString(),x(1).toString()) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
 		    }
-		    debug("[DEBUG] updating the current bookmark for this db + table into BOOKMARKS table . . .")
+		    //Holder.log.debug("[DEBUG] updating the current bookmark for this db + table into BOOKMARKS table . . .")
 		    dataSource.updateBookMark(currBookMark) // update the bookmark table - done !
 	      }(ExecutionContext.Implicits.global) onSuccess { // future onSuccess check
-	        case _ => info("[SQL] [COMPLETED] =/="+dataSource.toString()) // ack message on success
+	        case _ => //Holder.log.info("[SQL] [COMPLETED] =/="+dataSource.toString()) // ack message on success
 	      }
-	      debug("[DEBUG] [SQL] still executing == "+dataSource.toString())
-	      info("[SQL] [EXECUTING] =/="+dataSource.toString())
+	      //Holder.log.debug("[DEBUG] [SQL] still executing == "+dataSource.toString())
+	      //Holder.log.info("[SQL] [EXECUTING] =/="+dataSource.toString())
 	      //sender ! new SQLExecuting(config,request)
 	      Future {
 		      dataSource.getPKs4UpdationKafka(conf,sqlContext) // or straightaway and get rid of the wrapper func pollAndSink - KAFKA
 		      dataSource.getPKs4UpdationHDFS(conf,sqlContext) // or straightaway and get rid of the wrapper func pollAndSink - HDFS
 	      }(ExecutionContext.Implicits.global) onSuccess {
-	        case _ => info("[STREAMING] [COMPLETED] =/="+dataSource.toString()) // ack message on success
+	        case _ => //Holder.log.info("[STREAMING] [COMPLETED] =/="+dataSource.toString()) // ack message on success
 	      }
-	      debug("[DEBUG] [STREAMING] still executing == "+dataSource.toString())
-    	  info("[STREAMING] [EXECUTING] =/="+dataSource.toString())
+	      //Holder.log.debug("[DEBUG] [STREAMING] still executing == "+dataSource.toString())
+    	  //Holder.log.info("[STREAMING] [EXECUTING] =/="+dataSource.toString())
     	  */
 		}
-    debug("[DEBUG] closing down the internal connection . . .")
+    //Holder.log.debug("[DEBUG] closing down the internal connection . . .")
 		connection.close()
-		//debug("[DEBUG] requestsRecordsDB.count() == "+requestsRecordsDB.count())
+		////Holder.log.debug("[DEBUG] requestsRecordsDB.count() == "+requestsRecordsDB.count())
 		// getting just those rows which were 0 i.e not even SQL persistence  (commenting) - filter
 		//requestsRecordsDB = requestsRecordsDB.where(requestsRecordsDB(string("db.internal.tables.requests.cols.status"))==="\""+string("db.internal.tables.requests.defs.defaultStatusVal")+"\"")// make sure to put status as 0 and update them also.
-		//debug("[DEBUG] filtered ....")
-		//debug("[DEBUG] records after filtering on status == "+requestsRecordsDB.count())
+		////Holder.log.debug("[DEBUG] filtered ....")
+		////Holder.log.debug("[DEBUG] records after filtering on status == "+requestsRecordsDB.count())
 		// for all the records fetched above, parse the requests and send them to actors etc.
-		//debug("[DEBUG] Sending the records one by one to the Pipeline . . .")
+		////Holder.log.debug("[DEBUG] Sending the records one by one to the Pipeline . . .")
 		//requestsRecordsDB.foreach { 
 		  // to avoid the Serialization Exceptions
 		  //row  => requestHandlerRef ! new StartPipeline(config,row) 
 		//}
 		// the init process i.e that reads from the db is complete
-		debug("[DEBUG] starting the api service actor . . .")
-		private val api = pipelineSystem.actorOf(Props(classOf[ApiHandler],config,conf,sqlContext), name = string("actorSystem.actors.service"))
+		//Holder.log.debug("[DEBUG] starting the api service actor . . .")
+		private val api = pipelineSystem.actorOf(Props(classOf[ApiHandler],config), name = string("actorSystem.actors.service"))
 		private implicit val timeout = Timeout(Duration.apply(int("handler.timeout.scalar"), string("handler.timeout.unit")))//from root.server
-    debug("[DEBUG] on for the transport IO(Http) Actor . . .")
+    //Holder.log.debug("[DEBUG] on for the transport IO(Http) Actor . . .")
 		private val transport = IO(Http)
     override def bind {
-      debug("[DEBUG] binding the api service actor to 127.0.0.1:9999")
+      //Holder.log.debug("[DEBUG] binding the api service actor to 127.0.0.1:9999")
       transport ! Http.Bind(api, interface = string("host"), port = int("port"))
-      info("server bound: " + string("host") + ":" + int("port"))
+      //Holder.log.info("server bound: " + string("host") + ":" + int("port"))
     }
 	  
 	  override def close() {
-	    debug("[DEBUG] time to shut the api service actor and the entire system / rootserver down. . .")
+	    //Holder.log.debug("[DEBUG] time to shut the api service actor and the entire system / rootserver down. . .")
       transport ? Http.Unbind
       pipelineSystem.stop(api)
       pipelineSystem.shutdown()
-      info("server shutdown complete: " + string("host") + ":" + int("port"))
+      //Holder.log.info("server shutdown complete: " + string("host") + ":" + int("port"))
     }
 
   def transform(request: String) = {
@@ -253,7 +346,7 @@ class RootServer(val config: Config) extends Logging with Configurable with Serv
 				val conntype = requestObject.conntype // e.g com.sql.MySQL.driver
 				val fullTableSchema = requestObject.fullTableSchema // fully qualified table schema
 				// create a datasource to connect for the above request / json / x
-				debug("[DEBUG] [SQL] instantiating the dataSource . . .")
+				//Holder.log.debug("[DEBUG] [SQL] instantiating the dataSource . . .")
 				val dataSource = new DataSource(config,conntype,host,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema)
 		    dataSource
 		  }

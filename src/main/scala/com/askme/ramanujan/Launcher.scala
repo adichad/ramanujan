@@ -5,8 +5,14 @@ import java.lang.management.ManagementFactory
 
 import com.askme.ramanujan.server.Server
 import grizzled.slf4j.Logging
+import org.apache.log4j.Logger
 
-object Launcher extends Logging with Configurable {
+object Launcher extends Configurable with Logging {
+  
+  object Holder extends Serializable {      
+     @transient lazy val log = Logger.getLogger(getClass.getName)    
+  }
+  
   debug("[DEBUG] starting the launcher . . .")
   override protected[this] val config = configure("environment", "application", "environment_defaults", "application_defaults")
   debug("[DEBUG] config initialized . . .")
@@ -17,6 +23,8 @@ object Launcher extends Logging with Configurable {
       backFillSystemProperties("component.name", "log.path.current", "log.path.archive", "log.level") // from reference.conf + environment_defaults.conf
       info(string("component.name")) // instance.fqn <- cluster.name <- component.name+env.name
       info("Log path: " + string("log.path.current"))
+      info("creating it, the Log path: . . .")
+      new java.io.File(string("log.path.current")).mkdirs
       debug("[DEBUG] backfilling completed . . .")
       writePID(string("daemon.pidfile"))
       if (boolean("sysout.detach")) System.out.close()

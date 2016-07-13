@@ -31,8 +31,8 @@ class SQLActor(val config: Config,val sqlContext: SQLContext) extends Actor with
 		 * 5. current offset is appended to the bookmark table
 		 */
 		var prevBookMark = request.getPrevBookMark() // get the previous bookmark - key,max(autoincr.) group by key filter key -> bookmark / ts | db.internal.tables.bookmarks.defs.defaultBookMarkValue for first time
-		var currBookMark = request.getCurrBookMark(sqlContext) // get the latest / maximum bookmark / ts | db.internal.tables.bookmarks.defs.defaultBookMarkValue for first time
-		var PKsAffectedDF = request.getAffectedPKs(sqlContext,prevBookMark,currBookMark) // distinct PKs and max(timestamp) + WHERE clause | same as PKs, timestamp if not a log table, and PKs / timestamp otherwise | could be empty also
+		var currBookMark = request.getCurrBookMark() // get the latest / maximum bookmark / ts | db.internal.tables.bookmarks.defs.defaultBookMarkValue for first time
+		var PKsAffectedDF = request.getAffectedPKs(prevBookMark,currBookMark) // distinct PKs and max(timestamp) + WHERE clause | same as PKs, timestamp if not a log table, and PKs / timestamp otherwise | could be empty also
 		if(PKsAffectedDF.rdd.isEmpty()){
 		  //info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+request.db+"_"+request.table)
 		}

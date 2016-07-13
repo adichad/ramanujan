@@ -27,12 +27,18 @@ import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.SparkConf
 import com.typesafe.config.Config
 import grizzled.slf4j.Logging
+import org.apache.log4j.Logger
 
 
 class DataSource(val config: Config,val conntype: String, val host: String, val port: String,           
 		val user: String, val password: String, val db: String, val table: String,          
-		val bookmark: String, val bookmarkformat: String, val primarykey: String, val fullTableSchema: String) extends Logging with Configurable with Serializable{
-		  val oConfig = config // maybe this relays config to them all
+		val bookmark: String, val bookmarkformat: String, val primarykey: String, val fullTableSchema: String) extends Configurable with Logging with Serializable{
+		  
+      object Holder extends Serializable {      
+       @transient lazy val log = Logger.getLogger(getClass.getName)    
+      }
+  
+      val oConfig = config // maybe this relays config to them all
 	    var oconntype: String = conntype // e.g com.mysql.driver.MySQL
 			var ohost: String = host // host ip
 			var oport: String = port // port no.
@@ -62,8 +68,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		    val timeNow = Calendar.getInstance.getTime()
 		    val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
 		    val timeNowStr = format.format(timeNow);
-		    val insertRequestQuery = "INSERT INTO `"+string("db.internal.tables.requests.name")+"`(`"+string("db.internal.tables.requests.cols.processDate")+"`,`"+string("db.internal.tables.requests.cols.host")+"`,`"+string("db.internal.tables.requests.cols.dbname")+string("db.internal.tables.requests.cols.dbtable")+"`,`"+"`,`"+string("db.internal.tables.requests.cols.request")+"`,`"+string("db.internal.tables.requests.cols.status")+"`)" + "VALUES( '"+timeNowStr+"','"+host+"','"+db+"','"+table+"','"+json+"','"+string("db.internal.tables.requests.defs.defaultStatusVal")+"')" // insert '0' as status by default.
-		    //debug("[DEBUG] the insertQuery == "+insertRequestQuery)
+		    val insertRequestQuery = "INSERT INTO `"+string("db.internal.tables.requests.name")+"`(`"+string("db.internal.tables.requests.cols.processDate")+"`,`"+string("db.internal.tables.requests.cols.host")+"`,`"+string("db.internal.tables.requests.cols.dbname")+"`,`"+string("db.internal.tables.requests.cols.dbtable")+"`,`"+string("db.internal.tables.requests.cols.request")+"`,`"+string("db.internal.tables.requests.cols.status")+"`)" + "VALUES( '"+timeNowStr+"','"+host+"','"+db+"','"+table+"','"+json+"','"+string("db.internal.tables.requests.defs.defaultStatusVal")+"')" // insert '0' as status by default.
+		    //Holder.log.debug("[DEBUG] the insertQuery == "+insertRequestQuery)
 		    statement.executeUpdate(insertRequestQuery)
 		    internalConnection.close()
 		  }
@@ -101,28 +107,35 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									debug("[DEBUG] [SQL] [BookMarks] prev bookmark fetch query . . . == "+prevOffsetFetchQuery)
 									resultSet = statement.executeQuery(prevBookMarkFetchQuery)
 									if(resultSet.next()){
-									  debug("[DEBUG] [SQL] [BookMarks] [previous bookmark] this db_table  has a row . . . == "+toString())
+									 debug("[DEBUG] [SQL] [BookMarks] [previous bookmark] this db_table  has a row . . . == "+toString())
 										val bookmark = resultSet.getString(string("db.internal.tables.bookmarks.cols.bookmarkId"))
 										    debug("[DEBUG] [SQL] [BookMarks] [previous bookmark] the previous bookmark returned == "+bookmark)
 												bookmark
 									}
 									else {
-									      debug("[DEBUG] [SQL] [BookMarks] [previous] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
+									      debug("[DEBUG] [SQL] [BookMarks] [previous] [NULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
 									      string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
 								  }
 						}
 						else {
-						  debug("[DEBUG] [SQL] [BookMarks] [previous] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
+						  debug("[DEBUG] [SQL] [BookMarks] [previous] [NOTNULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
 						  string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
 						}
 			}
 			// get the current bookmark, from source table
-			def getCurrBookMark(sqlContext: SQLContext) = {
+			def getCurrBookMark() = {
+			  
+			  val conf = sparkConf("spark")
+		    val sc = SparkContext.getOrCreate(conf) // ideally this is what one must do - getOrCreate
+		    val sqlContext = new SQLContext(sc)
+			  
 			  debug("[DEBUG] [SQL] [BookMarks] [current bookmark] getting it . . . ")
 				if(conntype.toLowerCase().contains(string("db.type.mysql").toLowerCase())){// lowercase comparisons always
 				  debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] entered mysql types db/table . . .")
 				  debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] getting current bookmark / DF / . . .")
-				  debug("[DEBUG] [SQL] [SPARKDF query check] select max("+bookmark+") from "+table)
+				  debug("[DEBUG] [SQL] [SPARKDF query check] == (select max("+bookmark+") as "+bookmark+" from "+table+" ) tmp")
+				  val conf = sparkConf("spark")
+				  
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype,
@@ -145,14 +158,15 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				else if(conntype.toLowerCase().contains(string("db.type.postgres").toLowerCase())){
 					debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] entered postgres types db/table . . .")
 				  debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] getting current bookmark / DF / . . .")
+				  debug("[DEBUG] [SQL] [SPARKDF query check] == (select max("+bookmark+") as "+bookmark+" from "+table+" ) tmp")
 				  val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "org.postgresql.Driver"
 									"url" -> (string("db.conn.jdbc")+":"+string("db.type.postgres")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
-									"dbtable" -> ("select max("+bookmark+") from "+table) // now this is table specific so bookmark column must be passed!
+									"dbtable" -> ("(select max("+bookmark+") as "+bookmark+" from "+table+" ) tmp") // now this is table specific so bookmark column must be passed!
 									)
 							).load()
-							
+							debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] got the current bookmark . . .")
 							if(jdbcDF.rdd.isEmpty()){
 							  debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] the db of affected keys was all empty . . .")
 						    debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
@@ -167,14 +181,15 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				else if(conntype.toLowerCase().contains(string("db.type.sqlserver").toLowerCase())){
 				  debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] entered sqlserver types db/table . . .")
 				  debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] getting current bookmark / DF / . . .")
+				  debug("[DEBUG] [SQL] [SPARKDF query check] == (select max("+bookmark+") as "+bookmark+" from "+table+" ) tmp")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
 									"url" -> (string("db.conn.jdbc")+":"+string("db.type.sqlserver")+"://"+host+":"+port+";database="+db+";user="+user+";password="+password),
-									"dbtable" -> ("select max("+bookmark+") from "+table) // now this is table specific so bookmark column must be passed!
+									"dbtable" -> ("(select max("+bookmark+") as "+bookmark+" from "+table+" ) tmp") // now this is table specific so bookmark column must be passed!
 									)
 							).load()
-							
+							debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] got the current bookmark . . .")
 							if(jdbcDF.rdd.isEmpty()){
 							  debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] the db of affected keys was all empty . . .")
 						    debug("[DEBUG] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
@@ -192,12 +207,17 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 					string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
 				}
 			}
-			def getAffectedPKs(sqlContext: SQLContext,prevBookMark: String,currBookMark: String) = {
+			def getAffectedPKs(prevBookMark: String,currBookMark: String) = {
+			  
+			  val conf = sparkConf("spark")
+			  val sc = SparkContext.getOrCreate(conf)
+			  val sqlContext = new SQLContext(sc)
+			  
 			  debug("[DEBUG] [SQL] [AFFECTED PKs] getting it . . . ")
 				if(conntype.toLowerCase().contains(string("db.type.mysql").toLowerCase())){
 				  debug("[DEBUG] [SQL] [AFFECTED PKs] entered mysql types db/table . . .")
 				  debug("[DEBUG] [SQL] [AFFECTED PKs] getting affected PKs / DF / . . .")
-				  debug("[DEBUG] [SQL] [AFFECTED PKs] [QUERY] === (select "+primarykey+" as "+primarykey+", max("+bookmark+") as "+bookmark+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
+				  debug("[DEBUG] [SQL] [AFFECTED PKs] [QUERY] === (select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
 				  val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype,
@@ -211,6 +231,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				else if(conntype.toLowerCase().contains(string("db.type.postgres").toLowerCase())){
 				  debug("[DEBUG] [SQL] [AFFECTED PKs] entered postgres types db/table . . .")
 				  debug("[DEBUG] [SQL] [AFFECTED PKs] getting affected PKs / DF / . . .")
+				  debug("[DEBUG] [SQL] [AFFECTED PKs] [QUERY] === (select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "org.postgresql.Driver"
@@ -224,7 +245,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				else if(conntype.toLowerCase().contains(string("db.type.sqlserver").toLowerCase())){
 				  debug("[DEBUG] [SQL] [AFFECTED PKs] entered sqlserver types db/table . . .")
 				  debug("[DEBUG] [SQL] [AFFECTED PKs] getting affected PKs / DF / . . .")
-					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
+					debug("[DEBUG] [SQL] [AFFECTED PKs] [QUERY] === (select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
+				  val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
 									"url" -> (string("db.conn.jdbc")+":"+string("db.type.sqlserver")+"://"+host+":"+port+";database="+db+";user="+user+";password="+password),
@@ -243,8 +265,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			}
 			def getPKs4UpdationKafka(conf: SparkConf,sqlContext: SQLContext) = { // get the primary keys for insertion, as well as their timestamps/ bookmarks
 				val table_to_query = table; val db_to_query = db
-				debug("[DEBUG] [STREAMING] [PKs] [KAFKA] for == "+db_to_query+"_"+table_to_query)
-				debug("[DEBUG] [STREAMING] [KAFKA] [QUERY]  (select "+string("db.internal.tables.status.cols.primarykey")+","+string("db.internal.tables.status.cols.sourceId")+" from "+string("db.internal.tables.status.name")+" where "+string("db.internal.tables.status.cols.dbname")+" in (\""+db_to_query+"\") and "+string("db.internal.tables.status.cols.dbtable")+" in (\""+table_to_query+"\") and "+string("db.internal.tables.status.cols.sourceId")+" > "+string("db.internal.tables.status.cols.kafkaTargetId")+") kafka_tmp")
+				Holder.log.debug("[DEBUG] [STREAMING] [PKs] [KAFKA] for == "+db_to_query+"_"+table_to_query)
+				Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] [QUERY]  (select "+string("db.internal.tables.status.cols.primarykey")+","+string("db.internal.tables.status.cols.sourceId")+" from "+string("db.internal.tables.status.name")+" where "+string("db.internal.tables.status.cols.dbname")+" in (\""+db_to_query+"\") and "+string("db.internal.tables.status.cols.dbtable")+" in (\""+table_to_query+"\") and "+string("db.internal.tables.status.cols.sourceId")+" > "+string("db.internal.tables.status.cols.kafkaTargetId")+") kafka_tmp")
 				val sc = SparkContext.getOrCreate(conf)
 						val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 								Map(
@@ -254,11 +276,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 										)
 								).load()
 								if(jdbcDF.rdd.isEmpty()){
-								  debug("[DEBUG] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
-								  //info("no persistences done to the kafka sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
+								  //Holder.log.info("no persistences done to the kafka sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
 								}
 								else{
-								  debug("[DEBUG] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
   								jdbcDF.map { x => {
   								                    val conf = sparkConf("spark");
   								                    val sc=SparkContext.getOrCreate(conf);
@@ -272,7 +294,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			}
 			def getPKs4UpdationHDFS(conf: SparkConf,sqlContext: SQLContext) = { // get the primary keys for insertion, as well as their timestamps/ bookmarks
 				val table_to_query = table; val db_to_query = db
-				debug("[DEBUG] [STREAMING] [PKs] [HDFS] for == "+db_to_query+"_"+table_to_query)
+				Holder.log.debug("[DEBUG] [STREAMING] [PKs] [HDFS] for == "+db_to_query+"_"+table_to_query)
 				val sc = SparkContext.getOrCreate(conf)
 						val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 								Map(
@@ -282,22 +304,22 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 										)
 								).load()
 								if(jdbcDF.rdd.isEmpty()){
-								  debug("[DEBUG] [STREAMING] [PKs] [HDFS] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
-								  //info("no persistences done to the sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [HDFS] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
+								  //Holder.log.info("no persistences done to the sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
 								}
 								else{
-								  debug("[DEBUG] [STREAMING] [PKs] [HDFS] going to persist into == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [HDFS] going to persist into == "+db_to_query+"_"+table_to_query)
   								jdbcDF.map { x => fetchFromFactTableAndSinkHDFS(x,sqlContext) } // hdfs append
 								}
-								debug("[DEBUG] [STREAMING] [PKs] [HDFS] [PiggyMerge] going to persist into == "+db_to_query+"_"+table_to_query)
+								Holder.log.debug("[DEBUG] [STREAMING] [PKs] [HDFS] [PiggyMerge] going to persist into == "+db_to_query+"_"+table_to_query)
 								piggyMerge(sc,sqlContext,db_to_query,table_to_query) // take the two tables, and merge them
 			}
 
 			def fetchFromFactTableAndSinkKafka(x: Row,sqlContext: SQLContext) : String = { // had to explicitly do that
-			  debug("[DEBUG] [STREAMING] [KAFKA] entered the row-by-row sink . . .")
+			  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] entered the row-by-row sink . . .")
 				val pk = x.getString(0) // get pk from the row
 				val bkmk = x.getString(1) // get bookmark from row
-				debug("[DEBUG] [STREAMING] [KAFKA] doing it for == "+pk)
+				Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] doing it for == "+pk)
 				
 				val props = new Properties()
 				props.put("metadata.broker.list", string("sinks.kafka.brokers"))
@@ -309,7 +331,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			  val producer = new Producer[String,String](config)
 				
 				if(conntype.contains(string("db.type.mysql"))){ // selecting entire rows - insertion into kafka as json and hdfs as ORC
-				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == mysql")
+				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == mysql")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype,
@@ -318,7 +340,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									)
 							).load()
 					val row_to_insert: Row = jdbcDF.first()
-					debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+					Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
 					var rowMap:Map[String,String] = Map()
 					val fullTableSchemaArr = ofullTableSchema.split(",")
 					for(i <- 0 until fullTableSchemaArr.length) {
@@ -327,15 +349,15 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 					implicit val formats = Serialization.formats(NoTypeHints)
 					val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 					val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-					debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 					producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-					debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
 					// KAFKA Over
 					updateTargetIdsBackKafka(db,table,pk,bkmk)
 					"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else if(conntype.contains(string("db.type.postgres"))){
-				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == postgres")
+				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == postgres")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "org.postgresql.Driver"
@@ -344,7 +366,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									)
 							).load()
 							val row_to_insert: Row = jdbcDF.first()
-							debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
 							var rowMap:Map[String,String] = Map()
 							val fullTableSchemaArr = ofullTableSchema.split(",")
 							for(i <- 0 until fullTableSchemaArr.length) {
@@ -353,15 +375,15 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 					    implicit val formats = Serialization.formats(NoTypeHints)
 					    val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 					    val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-					    debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					    Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 					    producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-					    debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					    Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
 					    // KAFKA Over
 					    updateTargetIdsBackKafka(db,table,pk,bkmk)
 					    "[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else if(conntype.contains(string("db.type.sqlserver"))){
-				  debug("[DEBUG] [STREAMING] [KAFKA] db entered was == sqlserver")
+				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == sqlserver")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
@@ -370,7 +392,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									)
 							).load()
 							val row_to_insert: Row = jdbcDF.first()
-							debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
 							var rowMap:Map[String,String] = Map()
 							val fullTableSchemaArr = ofullTableSchema.split(",")
 							for(i <- 0 until fullTableSchemaArr.length) {
@@ -379,15 +401,15 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 							implicit val formats = Serialization.formats(NoTypeHints)
 							val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 							val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-							debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 							producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-							debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
 							// KAFKA Over
 							updateTargetIdsBackKafka(db,table,pk,bkmk)
 							"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else{
-				  debug("[DEBUG] [STREAMING] [KAFKA] nothing to publish . . .")
+				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] nothing to publish . . .")
 				  // no need to send it to either of kafka or hdfs
 					// no supported DB type - return a random string with fullTableSchema
 				  val fullTableSchemaArr = ofullTableSchema.split(",")
@@ -405,12 +427,12 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			}
 			
 			def fetchFromFactTableAndSinkHDFS(x: Row,sqlContext: SQLContext) : String = { // had to explicitly do that
-			  debug("[DEBUG] [STREAMING] [HDFS] entered hdfs persistence function . . .")
+			  Holder.log.debug("[DEBUG] [STREAMING] [HDFS] entered hdfs persistence function . . .")
 				val pk = x.getString(0) // get pk from the row
 				val bkmk = x.getString(1) // get bookmark from row
-				debug("[DEBUG] [STREAMING] [HDFS] doing it for == "+pk)
+				Holder.log.debug("[DEBUG] [STREAMING] [HDFS] doing it for == "+pk)
 				if(conntype.contains(string("db.type.mysql"))){ // selecting entire rows - insertion into kafka as json and hdfs as ORC
-				  debug("[DEBUG] [STREAMING] [HDFS] dbtype == mysql")
+				  Holder.log.debug("[DEBUG] [STREAMING] [HDFS] dbtype == mysql")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype,
@@ -419,13 +441,13 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									)
 							).load()
 					// put the row into parent HDFS location + bookmarks wise year/month/date
-					debug("[DEBUG] [STREAMING] [HDFS] inserting into the hdfs the entire (jdbc)DF")
+					Holder.log.debug("[DEBUG] [STREAMING] [HDFS] inserting into the hdfs the entire (jdbc)DF")
 					jdbcDF.write.partitionBy(bookmark).mode(SaveMode.Append).orc(formPartitionPath(string("sinks.hdfs.prefixPath"),db,table,bkmk))
 					updateTargetIdsBackHDFS(db,table,pk,bkmk)
 					"[STREAMING] [HDFS] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else if(conntype.contains(string("db.type.postgres"))){
-				  debug("[DEBUG] [STREAMING] [HDFS] dbtype == postgres")
+				  Holder.log.debug("[DEBUG] [STREAMING] [HDFS] dbtype == postgres")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "org.postgresql.Driver"
@@ -434,13 +456,13 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									)
 							).load()
 					    // put the row into parent HDFS location + bookmarks wise year/month/date
-					    debug("[DEBUG] [STREAMING] [HDFS] inserting into the hdfs the entire (jdbc)DF")
+					    Holder.log.debug("[DEBUG] [STREAMING] [HDFS] inserting into the hdfs the entire (jdbc)DF")
 							jdbcDF.write.partitionBy(bookmark).mode(SaveMode.Append).orc(formPartitionPath(string("sinks.hdfs.prefixPath"),db,table,bkmk))
 					    updateTargetIdsBackHDFS(db,table,pk,bkmk)
 					    "updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else if(conntype.contains(string("db.type.sqlserver"))){
-				  debug("[DEBUG] [STREAMING] [HDFS] dbtype == sqlserver")
+				  Holder.log.debug("[DEBUG] [STREAMING] [HDFS] dbtype == sqlserver")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
@@ -449,7 +471,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									)
 							).load()
 							// put the row into parent HDFS location + bookmarks wise year/month/date
-							debug("[DEBUG] [STREAMING] [HDFS] inserting into the hdfs the entire (jdbc)DF")
+							Holder.log.debug("[DEBUG] [STREAMING] [HDFS] inserting into the hdfs the entire (jdbc)DF")
 							jdbcDF.write.partitionBy(bookmark).mode(SaveMode.Append).orc(formPartitionPath(string("sinks.hdfs.prefixPath"),db,table,bkmk))
 							updateTargetIdsBackHDFS(db,table,pk,bkmk)
 							"updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
@@ -457,38 +479,38 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				else{ // no need to send it to either of kafka or hdfs
 					// no supported DB type - return a random string with fullTableSchema
 				  // KAFKA Over
-				  debug("[DEBUG] [STREAMING] [HDFS] some unsupported db type . . .")
+				  Holder.log.debug("[DEBUG] [STREAMING] [HDFS] some unsupported db type . . .")
 				  updateTargetIdsBackHDFS(db,table,pk,bkmk)
 				  "updations EXITTED successfully"
 				}
 			}
 
   def preprocess(fetchFromFactTableString: String) = { // for all kinds of preprocessing - left empty
-      debug("[DEBUG] [STREAMING] preprocessing func called . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] preprocessing func called . . .")
 		  fetchFromFactTableString
 		}
 
   def updateTargetIdsBackKafka(db: String, table: String, pk: String, bkmrk: String) = {
-      debug("[DEBUG] [STREAMING] [KAFKA] update the targets back . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] update the targets back . . .")
       internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		  val statement = internalConnection.createStatement()
 			val updateTargetQuery = "UPDATE "+string("db.internal.tables.status.name")+" SET "+string("db.internal.tables.status.cols.kafkaTargetId")+"="+string("db.internal.tables.status.cols.sourceId")+" where "+string("db.internal.tables.status.cols.primarykey")+"="+pk+" and "+(string("db.internal.tables.status.cols.sourceId"))+"="+bkmrk+";"
 		  statement.executeQuery(updateTargetQuery) // perfectly fine if another upsert might have had happened in the meanwhile
-		  debug("[DEBUG] [STREAMING] [KAFKA] updated == "+pk+"_"+bkmrk)
+		  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] updated == "+pk+"_"+bkmrk)
 		  internalConnection.close()	
   }
   def updateTargetIdsBackHDFS(db: String, table: String, pk: String, bkmrk: String) = {
-      debug("[DEBUG] [STREAMING] [HDFS] update the targets back . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] update the targets back . . .")
       internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		  val statement = internalConnection.createStatement()
 			val updateTargetQuery = "UPDATE "+string("db.internal.tables.status.name")+" SET "+string("db.internal.tables.status.cols.hdfsTargetId")+"="+string("db.internal.tables.status.cols.sourceId")+" where "+string("db.internal.tables.status.cols.primarykey")+"="+pk+" and "+(string("db.internal.tables.status.cols.sourceId"))+"="+bkmrk+";"
 		  statement.executeQuery(updateTargetQuery) // perfectly fine if another upsert might have had happened in the meanwhile
-		  debug("[DEBUG] [STREAMING] [HDFS] updated == "+pk+"_"+bkmrk)
+		  Holder.log.debug("[DEBUG] [STREAMING] [HDFS] updated == "+pk+"_"+bkmrk)
 		  internalConnection.close()	
   }
 
   def formPartitionPath(prefix: String, db: String, table: String,bookmark: String) = {
-      debug("[DEBUG] [STREAMING] [HDFS] form some goddamn partition path . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] form some goddamn partition path . . .")
 		  prefix+db+"_"+table+"/dt="+bookmark.substring(0, int("sinks.hdfs.partitionEnd")) // not using the bookmark because of no partition,or infact
 		}
 
@@ -502,27 +524,27 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
        * join them on a key
        * overwrite hdfsMAIN location - try partitioning as year/month/date
        */
-      debug("[DEBUG] [STREAMING] [HDFS] piggy Merge was called"+db_to_query+"_"+table_to_query)
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] piggy Merge was called"+db_to_query+"_"+table_to_query)
       val fullTableSchema = StructType(ofullTableSchema.split(',').map { x => StructField(x,StringType,true) }) // schema
       
       val hdfsMAINdf = sqlContext.read.format("orc").load(getTable("main",db_to_query,table_to_query)).toDF(ofullTableSchema) // all partitions
-      debug("[DEBUG] [STREAMING] [HDFS] hdfs Main got it . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] hdfs Main got it . . .")
       val hdfsCHANGESdf = sqlContext.read.format("orc").load(getTable("changes",db_to_query,table_to_query)).toDF(ofullTableSchema) // all partition
-      debug("[DEBUG] [STREAMING] [HDFS] hdfs Changes got it . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] hdfs Changes got it . . .")
       val hdfs1df = hdfsMAINdf.join(hdfsCHANGESdf, hdfsMAINdf(primarykey) !== hdfsCHANGESdf(primarykey)) // get the non affected ones ! Costly
-      debug("[DEBUG] [STREAMING] [HDFS] hdfs1df got it . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] hdfs1df got it . . .")
       val dfUnion = hdfs1df.unionAll(hdfsCHANGESdf)
-      debug("[DEBUG] [STREAMING] [HDFS] dfUnion Main got it . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] dfUnion Main got it . . .")
       // pig like flow - uncommon records + new editions/changes
       // now this dfUnion overrides the hdfsMAINdf location - either bookmark partition or map it to date time etc. - even bookmark is fine
-      debug("[DEBUG] [STREAMING] [HDFS] upserting . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] upserting . . .")
       dfUnion.write.mode(SaveMode.Overwrite).partitionBy(bookmark).format("orc").save(getTable("main", db_to_query, table_to_query)) // partition by needed ?!?
-	    debug("[DEBUG] [STREAMING] [HDFS] upserted . . .")	
+	    Holder.log.debug("[DEBUG] [STREAMING] [HDFS] upserted . . .")	
   }
 
     def getTable(arg: String, db_to_query: String, table_to_query: String) = {
 		  // placeholder -> return the main and changes tables only
-      debug("[DEBUG] [STREAMING] [HDFS] getting the table . . .")
+      Holder.log.debug("[DEBUG] [STREAMING] [HDFS] getting the table . . .")
       arg+db_to_query+table_to_query
 		}
 
