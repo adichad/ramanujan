@@ -1,8 +1,6 @@
 package com.askme.ramanujan.server
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.Row
-import com.askme.ramanujan.util.DataSource
 import akka.actor.ActorSystem
 import akka.actor.Props
 import com.askme.ramanujan.actors.Listener
@@ -13,20 +11,24 @@ import akka.util.Timeout
 import akka.io.IO
 import spray.can.Http
 import akka.pattern.ask
+
 import scala.concurrent.duration.Duration
-import com.askme.ramanujan.actors.StartPipeline
 import com.typesafe.config.Config
 import com.askme.ramanujan.Configurable
 import java.sql.DriverManager
+import org.joda.time.Period
+
 import spray.json.DefaultJsonProtocol
 import spray.json._
 import java.util.concurrent.Executors
+
 import com.askme.ramanujan.util.DataSource
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.mllib.util.Saveable
 import org.apache.spark.sql.SaveMode
 import java.util.Properties
-import org.apache.spark.sql.functions.udf
+
+import com.metamx.common.Granularity
+import com.metamx.tranquility.beam.ClusteredBeamTuning
 import org.apache.log4j.Logger
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -36,19 +38,13 @@ import org.apache.spark.streaming.kafka.KafkaUtils
 import kafka.serializer.DefaultDecoder
 import kafka.serializer.StringDecoder
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.streaming.kafka.HasOffsetRanges
 import org.joda.time.DateTime
 import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.retry.ExponentialBackoffRetry
-
-import io.druid.query.aggregation.AggregatorFactory;
-import io.druid.query.aggregation.CountAggregatorFactory;
-import io.druid.query.aggregation.DoubleMaxAggregatorFactory;
-import io.druid.query.aggregation.DoubleMinAggregatorFactory;
-import io.druid.query.aggregation.DoubleSumAggregatorFactory;
-import io.druid.query.aggregation.HistogramAggregatorFactory;
-import io.druid.query.aggregation.hyperloglog.HyperUniquesAggregatorFactory;
-import com.metamx.tranquility.druid.DruidBeams;
+import io.druid.query.aggregation._
+import io.druid.query.aggregation.hyperloglog.HyperUniquesAggregatorFactory
+import com.metamx.tranquility.druid.{DruidBeams, DruidLocation, DruidRollup, SpecificDruidDimensions}
+import io.druid.granularity.QueryGranularities
 
 class RootServer(val config: Config) extends Configurable with Server with Logging with Serializable {
   
@@ -241,9 +237,9 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
     */
     //{u'createdtime': u'2016-07-02 14:29:15.0', u'sourceorderid': u'AB12410922P2085415', u'salesorderid': u'98145973', u'TSpartitionKey': u'dt=2016-07-02', u'website_createtime': u'2016-07-02 14:13:30.0'}
     
-    val druidDataSource = topic
-    val dimensions = dataSource.fullTableSchema.split(',').toSeq
-    
+    val druidDataSource: String = topic
+    val dimensions = dataSource.fullTableSchema.split(',').toIndexedSeq
+
     val aggregators = Seq(new CountAggregatorFactory("cnt"), new LongSumAggregatorFactory("baz", "baz"))
 
     // Tranquility needs to be able to extract timestamps from your object type (in this case, Map<String, Object>).
@@ -256,8 +252,8 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
     .builder(timestamper)
     .curator(curator)
     .discoveryPath(discoveryPath)
-    .location(DruidLocation(indexService, firehosePattern, dataSource))
-    .rollup(DruidRollup(SpecificDruidDimensions(dimensions), aggregators, QueryGranularity.MINUTE))
+    .location(DruidLocation(indexService, firehosePattern, druidDataSource))
+    .rollup(DruidRollup(SpecificDruidDimensions(dimensions), aggregators, QueryGranularities.ALL))
     .tuning(
       ClusteredBeamTuning(
       segmentGranularity = Granularity.HOUR,
