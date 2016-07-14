@@ -137,7 +137,7 @@ dependencies {
   compile group: 'io.druid', name: 'druid-common', 								    version: '0.7.3'
   compile     group: 'io.druid.extensions',            name: 'druid-hdfs-storage',                                version: '0.7.2'
   compile     group: 'org.apache.curator',         name: 'curator-framework',                                 version: '3.2.0'
-  compile     group: 'io.druid', 		      name: 'tranquility-core_2.11', 				    version: ‘0.6.3’
+  compile     group: 'io.druid', 		      name: 'tranquility-core_2.11', 				    version: '0.6.3'
   compile     group: "com.101tec",                 name: "zkclient",                                          version: '0.4'
   compile     group: 'org.apache.tika',            name: "tika-parsers",                                      version: '1.9'
   compile     group: 'com.googlecode.juniversalchardet', name:'juniversalchardet',                            version: '1.0.3'
