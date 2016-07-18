@@ -24,6 +24,8 @@ CREATE TABLE Requests(
    host VARCHAR(100) NOT NULL,
    dbname VARCHAR(100) NOT NULL,
    dbtable VARCHAR(100) NOT NULL,
-   status VARCHAR(40) NOT NULL,
+   lastStarted VARCHAR(100) NOT NULL,
+   lastEnded VARCHAR(100) NOT NULL,
+   runFrequency VARCHAR(100) NOT NULL,
    PRIMARY KEY (host, dbname, dbtable)
 );

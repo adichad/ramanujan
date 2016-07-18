@@ -96,7 +96,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 	          }
 	        )
 	        )~
-	        getFromResourceDirectory("web/static")
+						getFromResourceDirectory("web/static")
 	      )
 	    }
       override def postStop = { // do not know what for . . .

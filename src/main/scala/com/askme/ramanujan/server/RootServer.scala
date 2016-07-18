@@ -1,72 +1,60 @@
 package com.askme.ramanujan.server
+import java.sql.DriverManager
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
+
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.io.IO
+import akka.pattern.ask
+import akka.util.Timeout
+import com.askme.ramanujan.Configurable
+import com.askme.ramanujan.actors.{ApiHandler, DruidActor, Listener, WorkerActor}
+import com.askme.ramanujan.util.DataSource
+import com.typesafe.config.Config
+import grizzled.slf4j.Logging
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SQLContext
-import akka.actor.ActorSystem
-import akka.actor.Props
-import com.askme.ramanujan.actors.Listener
-import grizzled.slf4j.Logging
-import com.askme.ramanujan.actors.RequestHandler
-import com.askme.ramanujan.actors.ApiHandler
-import akka.util.Timeout
-import akka.io.IO
 import spray.can.Http
-import akka.pattern.ask
+import spray.json.{DefaultJsonProtocol, _}
 
 import scala.concurrent.duration.Duration
-import com.typesafe.config.Config
-import com.askme.ramanujan.Configurable
-import java.sql.DriverManager
-import org.joda.time.Period
-
-import spray.json.DefaultJsonProtocol
-import spray.json._
-import java.util.concurrent.Executors
-
-import com.askme.ramanujan.util.DataSource
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SaveMode
-import java.util.Properties
-
-import com.metamx.common.Granularity
-import com.metamx.tranquility.beam.ClusteredBeamTuning
-import org.apache.log4j.Logger
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.spark.streaming.StreamingContext
-import org.apache.spark.streaming.Seconds
-import org.apache.spark.streaming.kafka.KafkaUtils
-import kafka.serializer.DefaultDecoder
-import kafka.serializer.StringDecoder
-import org.apache.spark.storage.StorageLevel
-import org.joda.time.DateTime
-import org.apache.curator.framework.CuratorFrameworkFactory
-import org.apache.curator.retry.ExponentialBackoffRetry
-import io.druid.query.aggregation._
-import io.druid.query.aggregation.hyperloglog.HyperUniquesAggregatorFactory
-import com.metamx.tranquility.druid.{DruidBeams, DruidLocation, DruidRollup, SpecificDruidDimensions}
-import io.druid.granularity.QueryGranularities
 
 class RootServer(val config: Config) extends Configurable with Server with Logging with Serializable {
   
-    object Holder extends Serializable {      
-     @transient lazy val log = Logger.getLogger(getClass.getName)    
-    }
+    //object Holder extends Serializable {
+    // @transient lazy val log = Logger.getLogger(getClass.getName)
+    //}
     // normal sparkContext - initialize it from conf.spark
     debug("[DEBUG] initialize the conf for spark and the spark context . . .")
 		val conf = sparkConf("spark")
+
 		val sc = SparkContext.getOrCreate(conf) // ideally this is what one must do - getOrCreate
+
 		// one sqlContext - to pass on
 		val sqlContext = new SQLContext(sc)
-	  //create an actorSystem
+
+		//create an actorSystem
 		info("creating the actor system == "+string("actorSystem.name"))
 	  private implicit val pipelineSystem = ActorSystem(string("actorSystem.name"))
+
 	  // the listener, an option sys log class basically - one listener only
 	  info("creating the listener actor == "+string("actorSystem.actors.listener"))
-		val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener"))
+		val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener")) // one listener
+
+//		val indexService = string("sinks.druid.overlord")//"overlord" // Your overlord's druid.service, with slashes replaced by colons.
+//		val firehosePattern = string("sinks.druid.firehose")//"druid:firehose:%s" // Make up a service pattern, include %s somewhere in it.
+//		val discoveryPath = string("sinks.druid.discovery")//"/druid/discovery" // Your overlord's druid.discovery.curator.path.
+//
+//		val curator = CuratorFrameworkFactory.builder().connectString(string("sinks.hdfs.zookeeper.url"))
+//		.retryPolicy(new ExponentialBackoffRetry(1000, 20, 30000))
+//		.build()
+//		curator.start()
+
 		// the master class
-		info("creating the master actor == "+string("actorSystem.actors.master"))
-		val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
+		//info("creating the master actor == "+string("actorSystem.actors.master"))
+		//val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
 		// take a table in - completely? 
+
 		/*
 		 * COMMENTING THE GENERAL SPARK SQL APPROACH - USE A DB CONN INSTEAD.
 		 * debug("[DEBUG]creating requestsRecordsDB")
@@ -75,160 +63,131 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		.load()
 		*   
 		*/
+
 		debug("[DEBUG] invoking the internal db connections . . .")
 		val internalHost = string("db.internal.url") // get the host from env confs - tables bookmark & status mostly
 		val internalPort = string("db.internal.port") // get the port from env confs - tables bookmark & status mostly
 		val internalDB = string("db.internal.dbname") // get the port from env confs - tables bookmark & status mostly
-		val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
+	  val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
 		val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
 		
-		val internalURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+internalHost+":"+internalPort+"/"+internalDB) // the internal connection DB <status, bookmark, requests> etc
+		val internalURL: String = string("db.conn.jdbc")+":"+string("db.conn.use")+"://"+internalHost+":"+internalPort+"/"+internalDB // the internal connection DB <status, bookmark, requests> etc
 		
 		var connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
-		debug("[DEBUG] the initial internal db connection invoked . . .")
+
+	  debug("[DEBUG] the initial internal db connection invoked . . .")
 		val statement = connection.createStatement()
-		// get the "0" status requests - them all basically
-		debug("[DEBUG] [REQUESTS TABLE QUERY] SELECT * FROM "+string("db.internal.tables.requests.name")+" WHERE "+string("db.internal.tables.requests.cols.status")+" in (\""+string("db.internal.tables.requests.defs.defaultStatusVal")+"\")")
-		val resultSet = statement.executeQuery("SELECT * FROM "+string("db.internal.tables.requests.name")+" WHERE "+string("db.internal.tables.requests.cols.status")+" in (\""+string("db.internal.tables.requests.defs.defaultStatusVal")+"\")")
-		
-		val indexService = "overlord" // Your overlord's druid.service, with slashes replaced by colons.
-    val firehosePattern = "druid:firehose:%s" // Make up a service pattern, include %s somewhere in it.
-    val discoveryPath = "/druid/discovery" // Your overlord's druid.discovery.curator.path.
-    
-    //val curator = CuratorFrameworkFactory.builder().connectString(string("sinks.hadoop.zookeeper.url"))
-    //.retryPolicy(new ExponentialBackoffRetry(1000, 20, 30000))
-    //.build();
-    //curator.start();    
-		
-		while(resultSet.next()){ // processing the tables {requests} one by one. . .
-		  val processDate = resultSet.getString(string("db.internal.tables.requests.cols.processDate"))
-		  val request = resultSet.getString(string("db.internal.tables.requests.cols.request"))
-		  val status = resultSet.getString(string("db.internal.tables.requests.cols.status"))
-		  val host = resultSet.getString(string("db.internal.tables.requests.cols.host"))
-      val dbname = resultSet.getString(string("db.internal.tables.requests.cols.dbname"))
-      val dbtable = resultSet.getString(string("db.internal.tables.requests.cols.dbtable"))
-		  debug("[DEBUG] the table as a request == "+request)
-		  val dataSource = transform(request)
-		  import scala.concurrent._ // brute force imported
-    	val numberOfCPUs = sys.runtime.availableProcessors() // brute force imported
-	    val threadPool = Executors.newFixedThreadPool(numberOfCPUs) // brute force imported
-	    debug("[DEBUG] the converted datasource object == "+dataSource.toString())
-	    implicit val ec = ExecutionContext.fromExecutorService(threadPool) // brute force imported
-	    debug("[DEBUG] doing the SQL-SQL flow for == "+dataSource.db+"_"+dataSource.table)
-	    debug("[DEBUG] obtaining the previous, the current and the affected PKs")
-	    var prevBookMark = dataSource.getPrevBookMark()
-	    debug("[DEBUG] the previous bookmark == "+prevBookMark)
-	    var currBookMark = dataSource.getCurrBookMark()
-	    debug("[DEBUG] the current bookmark == "+currBookMark)
-	    var PKsAffectedDF: DataFrame = dataSource.getAffectedPKs(prevBookMark,currBookMark)
-	    debug("[DEBUG] the count of PKs returned == "+PKsAffectedDF.count())
-	    if(PKsAffectedDF.rdd.isEmpty()){
-		      info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
+
+		// while 1 loop - constant poll
+
+	  def getMins(freqUnit: String, freqDim: String): Int = {
+		  if(freqDim.toLowerCase().contains("min")){
+		  	freqUnit.toInt
 		  }
-		  // maintaining partitions by timestamp only, as of now. . .(atleast)
-		  def shortenTS: (String => String) = (ts: String) => {
-		    "dt="+ts.replaceAll(" ", "").substring(0, 10) // 10 digit partition size
+			else if(freqDim.toLowerCase().contains("hour")){
+			  freqUnit.toInt * 60 // ok if hardcoded
 		  }
-		  import org.apache.spark.sql.functions._
-		  val partitionColFunc = udf(shortenTS)//udf(shortenTS).apply(new org.apache.spark.sql.Column(processDate))
-		  val PKsAffectedDF_partition = PKsAffectedDF.withColumn("TSpartitionKey", partitionColFunc(col(dataSource.bookmark)))	// extra column added
-		  
-		  import sqlContext.implicits._
-		  val keys = PKsAffectedDF_partition.select("TSpartitionKey").distinct.collect.flatMap(_.toSeq)
-      val byPartitionArray = keys.map(key => PKsAffectedDF_partition.where($"TSpartitionKey" <=> key)) // Array Of DataFrames
-		  
-      for(i <- 0 to (keys.length - 1)) {
-        val key_ = keys(i).toString() // get part key
-        val df_ = byPartitionArray(i) // get part df
-        // hdfs://<host>:<port>/user/home/cloudera/cm_api.py <host> is Hadoop NameNode host and the <port> port number of Hadoop NameNode, 50070 
-        // s3a://<<ACCESS_KEY>>:<<SECRET_KEY>>@<<BUCKET>>/<<FOLDER>>/<<FILE>>
-        // http://www.infoobjects.com/different-ways-of-setting-aws-credentials-in-spark/ https://www.supergloo.com/fieldnotes/apache-spark-amazon-s3-examples-of-text-files/
-        val hdfspath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/"+dbname+"_"+dbtable+"/"+key_
-        val hconf = sc.hadoopConfiguration
-        hconf.set("fs.default.name", "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port"));
-        val hdfs = org.apache.hadoop.fs.FileSystem.get(hconf)
-        val partitionExistsBefore = hdfs.exists(new org.apache.hadoop.fs.Path(hdfspath))
-        
-        if(partitionExistsBefore) {
-          try{
-          debug("[DEBUG] [HDFS] [DUMP] The path was present before == "+hdfspath)
-          val partitionb4df = sqlContext.read.parquet(hdfspath).toDF((dataSource.fullTableSchema+",TSpartitionKey").split(',') : _*) //(dataSource.fullTableSchema)
-          //val partitionb4df = sc.textFile(hdfspath+"part-r-").toDF((dataSource.fullTableSchema+",TSpartitionKey").split(',') : _*) //("hdfs://quickstart.cloudera:8020/user/cloudera/README.md")
-          
-          val partitionPopulationRecordsDB = partitionb4df.unionAll(df_)
-          hdfs.delete(new org.apache.hadoop.fs.Path(hdfspath), true)
-          partitionPopulationRecordsDB.write.mode(SaveMode.ErrorIfExists).parquet(hdfspath)
-          }catch {
-            case _ : Throwable => debug("[HDFS] UPSERT ########################################## CULPRIT ############################"+key_)
-          }
-          
-        }
-        else{
-          debug("[DEBUG] [HDFS] [DUMP] The path was present before == "+hdfspath)
-          df_.write.mode(SaveMode.Overwrite).parquet(hdfspath) //.save(hdfspath)  
-        }
-      }
-		  
-		  val servers = string("sinks.kafka.bootstrap.servers")
-		  val brokers = string("sinks.kafka.metadata.brokers.list")
-		  val group = string("sinks.kafka.group.id")
-		  val producertype = string("sinks.kafka.producer.type")
-		  val keyserial = string("sinks.kafka.key.serializer")
-		  val value = string("sinks.kafka.value.serializer")
-		  val topicCreateEnable = string("sinks.kafka.auto.create.topics.enable") // "true"
-      
-		  val PKsAffectedDF_json = PKsAffectedDF_partition.toJSON
-		  //could also use the much elegant broadcast the conneksion approach
-			//http://allegro.tech/2015/08/spark-kafka-integration.html   
-		  
-    	PKsAffectedDF_json.foreachPartition { partitionOfRecords => {
-    	    var props = new Properties()
-    	    
-    	    props.put("bootstrap.servers",servers)// "kafka01.production.askmebazaar.com:9092,kafka02.production.askmebazaar.com:9092,kafka03.production.askmebazaar.com:9092")
-		  	  //props.put("metadata.broker.list", "localhost:9092")//"kafka01.production.askmebazaar.com:2181,kafka02.production.askmebazaar.com:2181,kafka03.production.askmebazaar.com:2181")
-			    props.put("group.id", "ramanujan")//"ramanujan")
-			    props.put("producer.type", "async")//"async")
-			    props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")//"org.apache.kafka.common.serialization.StringSerializer")
-			    props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")//"org.apache.kafka.common.serialization.StringSerializer")
-			    props.put("request.required.acks", "1")
-			    props.put("auto.create.topics.enable","true")
-			    //props.put("block.on.buffer.full","false")
-			    //props.put("advertised.host.name","localhost")
-			    
-			    val producer = new KafkaProducer[String,String](props)
-			    partitionOfRecords.foreach
-                {
-                    case x:String=>{
-                        val message=new ProducerRecord[String, String]("TOPIC_"+dbname+"_"+dbtable,dbname,x)
-                        producer.send(message).get();
-                    }
-                }
-    	    producer.close()
-    	  }
-    	}
-		  
-		  debug("[DEBUG] updating the current bookmark for this db + table into BOOKMARKS table . . .")
-		  dataSource.updateBookMark(currBookMark)
-		  
-		val topic = "TOPIC1_"+dbname+"_"+dbtable
-		val ssc = new StreamingContext(sc,Seconds(int("sinks.kafka.streaming.microbatch.time")))
-		
-		val streaming_broker_list = string("sinks.kafka.bootstrap.servers")
-		val streaming_zookeeper_connect = string("sinks.kafka.metadata.brokers.list")
-		val streaming_timeout_conn_ms = string("sinks.kafka.streaming.connection.timeout")
-		
-		val kafkaConf = Map(
-		    "metadata.broker.list" -> streaming_broker_list,
-		    "zookeeper.connect" -> streaming_zookeeper_connect,
-		    "group" -> group,
-		    "zookeeper.connection.timeout.ms" -> streaming_timeout_conn_ms)
-		    
-		val lines = KafkaUtils.createStream[Array[Byte], String, 
-      DefaultDecoder, StringDecoder](
-      ssc,
-      kafkaConf,
-      Map(topic -> 1),
-      StorageLevel.MEMORY_ONLY_SER).map(_._2) // means we only get the jsons
+		  else if(freqDim.toLowerCase().contains("day")){
+			  freqUnit.toInt * 3600 // ok if hardcoded
+		  }
+		  else  if(freqDim.toLowerCase().contains("week")){
+			  freqUnit.toInt * 25200 // ok if hardcoded
+		  }
+		  else freqUnit.toInt * 25200 * 4
+	  }
+
+		while(true) {
+			debug("[DEBUG] [REQUESTS] REQUESTS TABLE QUERY == SELECT * FROM "+string("db.internal.tables.requests.name"))
+			val resultSet = statement.executeQuery("SELECT * FROM "+string("db.internal.tables.requests.name")) // get all requests
+
+			while(resultSet.next()){ // the values and fields are always realtime
+				// metadata
+				val processDate = resultSet.getString(string("db.internal.tables.requests.cols.processDate"))
+				val request = resultSet.getString(string("db.internal.tables.requests.cols.request"))
+				val host = resultSet.getString(string("db.internal.tables.requests.cols.host"))
+				val dbname = resultSet.getString(string("db.internal.tables.requests.cols.dbname"))
+				val dbtable = resultSet.getString(string("db.internal.tables.requests.cols.dbtable"))
+				// health
+				val lastStarted = resultSet.getString(string("db.internal.tables.requests.cols.lastStarted"))
+				val lastEnded = resultSet.getString(string("db.internal.tables.requests.cols.lastEnded"))
+				val runFrequency = resultSet.getString(string("db.internal.tables.requests.cols.runFrequency"))
+				val totalRuns = resultSet.getString(string("db.internal.tables.requests.cols.totalRuns"))
+				val successRuns = resultSet.getString(string("db.internal.tables.requests.cols.success"))
+				val failureRuns = resultSet.getString(string("db.internal.tables.requests.cols.failure"))
+				val exceptions = resultSet.getString(string("db.internal.tables.requests.cols.exceptions"))
+				val currentState = resultSet.getString(string("db.internal.tables.requests.cols.currentState")) // currentState
+
+				debug("[DEBUG] [REQUESTS] [WHILE 1] current dataSource == "+request.toString())
+				// val format = new SimpleDateFormat("yyyy-mm-yy hh:mm:ss")
+				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
+				val lastStartedDate = format.parse(lastStarted)
+				val lastEndedDate = format.parse(lastEnded)
+
+				val currentDateDate = Calendar.getInstance().getTime()
+				val currentDateStr = format.format(currentDateDate)
+
+				if(totalRuns == 0){ // start it. the first time
+					statement.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = "+currentDateStr+" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.running")+" where "+string("db.internal.tables.requests.cols.host")+" = "+host+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbname+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbtable)
+					val dataSource = transform(request) // send this message
+					val workerActor = pipelineSystem.actorOf(Props(classOf[WorkerActor],config))
+					workerActor ! new TableMessage(listener,dataSource)
+					val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
+					druidActor ! new DruidMessage(listener,dataSource)
+
+				}
+				else{
+					val diffInMinsEndedStarted = TimeUnit.MINUTES.convert(lastEndedDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS) // milliseconds to minutes
+					if(diffInMinsEndedStarted < 0){ // it must be either still running or failed !
+							if(exceptions == string("db.internal.tables.requests.defs.NoException")){
+								// the previous run isnot complete yet, it is still running
+								debug("[DEBUG] [REQUESTS] [WHILE 1] still executing == "+request+" and current state == "+currentState)
+							}
+							else{
+								debug("[DEBUG] [REQUESTS] [WHILE 1] encountered exception == "+exceptions+" for dataSource == "+request)
+							}
+					}
+					else {
+						val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
+						val schedulingFrequencyParts = runFrequency.split(" ")
+						val freqUnit = schedulingFrequencyParts(0)
+						val freqDim = schedulingFrequencyParts(1)
+						val freqInMins = getMins(freqUnit,freqDim)
+						if(diffInMinsCurrentStarted > freqInMins){
+							debug("[DEBUG] [REQUESTS] [WHILE 1] it is time to run the script again . . .")
+							statement.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = "+currentDateStr+" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.running")+" where "+string("db.internal.tables.requests.cols.host")+" = "+host+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbname+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbtable)
+							val dataSource = transform(request) // send this message
+							val workerActor = pipelineSystem.actorOf(Props(classOf[WorkerActor],config))
+							workerActor ! new TableMessage(listener,dataSource)
+							val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
+							druidActor ! new DruidMessage(listener,dataSource)
+
+						}
+						else{
+							debug("[DEBUG] [REQUESTS] [WHILE 1] waiting to run on == "+request)
+						}
+
+					}
+
+				}
+			}
+		}
+
+		// get all the records - Requests Table
+		//debug("[DEBUG] [REQUESTS TABLE QUERY] SELECT * FROM "+string("db.internal.tables.requests.name"))
+		//val resultSet = statement.executeQuery("SELECT * FROM "+string("db.internal.tables.requests.name"))
+
+
+//    val curator = CuratorFrameworkFactory.builder().connectString(string("sinks.hdfs.zookeeper.url"))
+//    .retryPolicy(new ExponentialBackoffRetry(1000, 20, 30000))
+//    .build();
+//    curator.start();
+
+//		val lines = KafkaUtils.createStream[Array[Byte], String,
+//      DefaultDecoder, StringDecoder](
+//      ssc,
+//      kafkaConf,
+//      Map(topic -> 1),
+//      StorageLevel.MEMORY_ONLY_SER).map(_._2) // means we only get the jsons
     /*    
     	/* recieve offsets from the RDD */
       lines.foreachRDD { rdd =>
@@ -237,32 +196,33 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
     */
     //{u'createdtime': u'2016-07-02 14:29:15.0', u'sourceorderid': u'AB12410922P2085415', u'salesorderid': u'98145973', u'TSpartitionKey': u'dt=2016-07-02', u'website_createtime': u'2016-07-02 14:13:30.0'}
     
-    val druidDataSource: String = topic
-    val dimensions = dataSource.fullTableSchema.split(',').toIndexedSeq
-
-    val aggregators = Seq(new CountAggregatorFactory("cnt"), new LongSumAggregatorFactory("baz", "baz"))
-
-    // Tranquility needs to be able to extract timestamps from your object type (in this case, Map<String, Object>).
-    val timestamper = (eventMap: Map[String, Any]) => new DateTime(eventMap("timestamp"))
+//    val druidDataSource: String = topic
+//    val dimensions = dataSource.fullTableSchema.split(',').toIndexedSeq
+//
+//    val aggregators = Seq(new CountAggregatorFactory("cnt"), new LongSumAggregatorFactory("baz", "baz"))
+//
+//    // Tranquility needs to be able to extract timestamps from your object type (in this case, Map<String, Object>).
+//    val timestamper = (eventMap: Map[String, Any]) => new DateTime(eventMap("timestamp"))
 
     // Tranquility needs to be able to serialize your object type. By default this is done with Jackson. If you want to
     // provide an alternate serializer, you can provide your own via ```.objectWriter(...)```. In this case, we won't
     // provide one, so we're just using Jackson:
-    val druidService = DruidBeams
-    .builder(timestamper)
-    .curator(curator)
-    .discoveryPath(discoveryPath)
-    .location(DruidLocation(indexService, firehosePattern, druidDataSource))
-    .rollup(DruidRollup(SpecificDruidDimensions(dimensions), aggregators, QueryGranularities.ALL))
-    .tuning(
-      ClusteredBeamTuning(
-      segmentGranularity = Granularity.HOUR,
-      windowPeriod = new Period("PT10M"),
-      partitions = 1,
-      replicants = 1
-     )
-    )
-  .buildService()
+//    val druidService = DruidBeams
+//    .builder(timestamper)
+//    .curator(curator)
+//    .discoveryPath(discoveryPath)
+//    .location(DruidLocation(indexService, firehosePattern, druidDataSource))
+//    .rollup(DruidRollup(SpecificDruidDimensions(dimensions), aggregators, QueryGranularities.ALL))
+//    .tuning(
+//      ClusteredBeamTuning(
+//      segmentGranularity = Granularity.HOUR,
+//      windowPeriod = new Period("PT10M"),
+//      partitions = 1,
+//      replicants = 1
+//     )
+//    )
+//  .buildService()
+  
   
       
       
@@ -369,7 +329,6 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 	      //debug("[DEBUG] [STREAMING] still executing == "+dataSource.toString())
     	  //info("[STREAMING] [EXECUTING] =/="+dataSource.toString())
     	  */
-		}
     //debug("[DEBUG] closing down the internal connection . . .")
 		connection.close()
 		////debug("[DEBUG] requestsRecordsDB.count() == "+requestsRecordsDB.count())
@@ -385,18 +344,16 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		//}
 		// the init process i.e that reads from the db is complete
 		//debug("[DEBUG] starting the api service actor . . .")
-		
-		
-		
-		private val api = pipelineSystem.actorOf(Props(classOf[ApiHandler],config), name = string("actorSystem.actors.service"))
-		private implicit val timeout = Timeout(Duration.apply(int("handler.timeout.scalar"), string("handler.timeout.unit")))//from root.server
-    //debug("[DEBUG] on for the transport IO(Http) Actor . . .")
-		private val transport = IO(Http)
-    override def bind {
-      //debug("[DEBUG] binding the api service actor to 127.0.0.1:9999")
-      transport ! Http.Bind(api, interface = string("host"), port = int("port"))
-      //info("server bound: " + string("host") + ":" + int("port"))
-    }
+
+//		private val api = pipelineSystem.actorOf(Props(classOf[ApiHandler],config), name = string("actorSystem.actors.service"))
+//		private implicit val timeout = Timeout(Duration.apply(int("handler.timeout.scalar"), string("handler.timeout.unit")))//from root.server
+//    //debug("[DEBUG] on for the transport IO(Http) Actor . . .")
+//		private val transport = IO(Http)
+//    override def bind {
+//      //debug("[DEBUG] binding the api service actor to 127.0.0.1:9999")
+//      transport ! Http.Bind(api, interface = string("host"), port = int("port"))
+//      //info("server bound: " + string("host") + ":" + int("port"))
+//    }
 	  
 		def mapit(json: String,fullTableSchema: String) = {
       json.substring(1, json.length - 1)
@@ -406,13 +363,13 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
         .toMap      
     }
 		
-	  override def close() {
-	    //debug("[DEBUG] time to shut the api service actor and the entire system / rootserver down. . .")
-      transport ? Http.Unbind
-      pipelineSystem.stop(api)
-      pipelineSystem.shutdown()
-      //info("server shutdown complete: " + string("host") + ":" + int("port"))
-    }
+//	  override def close() {
+//	    //debug("[DEBUG] time to shut the api service actor and the entire system / rootserver down. . .")
+//      transport ? Http.Unbind
+//      pipelineSystem.stop(api)
+//      pipelineSystem.shutdown()
+//      //info("server shutdown complete: " + string("host") + ":" + int("port"))
+//    }
 
   def transform(request: String) = {
 		    case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String)
@@ -443,16 +400,16 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		    dataSource
 		  }
 
-  class Upserter(internalURL: String, internalUser: String, internalPassword: String) extends Serializable{
-    lazy val internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
-    def upsert(primarykey: String, bookmark: String, db: String, table: String) = {
-       // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
-				val statement = internalConnection.createStatement()
-						val upsertQuery = "INSERT INTO `"+string("db.internal.tables.status.name")+"`("+string("db.internal.tables.status.cols.dbname")+","+string("db.internal.tables.status.cols.table")+",`"+string("db.internal.tables.status.cols.primarykey")+"`,"+string("db.internal.tables.status.cols.sourceId")+","+string("db.internal.tables.status.cols.kafkaTargetId")+string("db.internal.tables.status.cols.hdfsTargetId")+") VALUES( '"+db+"','"+table+"','"+primarykey+"', '"+bookmark+"',"+string("db.internal.tables.status.defs.defaultTargetId")+string("db.internal.tables.status.defs.defaultTargetId")+") ON DUPLICATE KEY UPDATE `"+string("db.internal.tables.status.cols.sourceId")+"` = '"+bookmark+"'"        
-						val resultSet = statement.executeQuery(upsertQuery)
-				internalConnection.close()
-    }
-  }
+//  class Upserter(internalURL: String, internalUser: String, internalPassword: String) extends Serializable{
+//    lazy val internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
+//    def upsert(primarykey: String, bookmark: String, db: String, table: String) = {
+//       // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
+//				val statement = internalConnection.createStatement()
+//						val upsertQuery = "INSERT INTO `"+string("db.internal.tables.status.name")+"`("+string("db.internal.tables.status.cols.dbname")+","+string("db.internal.tables.status.cols.table")+",`"+string("db.internal.tables.status.cols.primarykey")+"`,"+string("db.internal.tables.status.cols.sourceId")+","+string("db.internal.tables.status.cols.kafkaTargetId")+string("db.internal.tables.status.cols.hdfsTargetId")+") VALUES( '"+db+"','"+table+"','"+primarykey+"', '"+bookmark+"',"+string("db.internal.tables.status.defs.defaultTargetId")+string("db.internal.tables.status.defs.defaultTargetId")+") ON DUPLICATE KEY UPDATE `"+string("db.internal.tables.status.cols.sourceId")+"` = '"+bookmark+"'"
+//						val resultSet = statement.executeQuery(upsertQuery)
+//				internalConnection.close()
+//    }
+//  }
 
   def jsonStrToMap(jsonStr: String): Map[String, Any] = {
   implicit val formats = org.json4s.DefaultFormats
@@ -460,3 +417,9 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
     parse(jsonStr).extract[Map[String, String]]
   }
 }
+
+sealed trait PipeMessage
+case class TableMessage(listener: ActorRef, dataSource: DataSource) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
+case class DruidMessage(listener: ActorRef, dataSource: DataSource) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
+case class WorkerDone(dataSource: DataSource) extends PipeMessage
+case class WorkerExecuting(dataSource: DataSource) extends PipeMessage

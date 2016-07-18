@@ -89,6 +89,18 @@
             <label for="fullTableSchema">Full Table Schema(Cols):</label>
             <input type="fullTableSchema" class="form-control" id="fullTableSchema" placeholder="Enter Full Table Schema(Cols):" data-ng-model="table.fullTableSchema" required>
           </div>
+          <div class="form-group">
+            <label for="partitionCol">HDFS Partition Columns:</label>
+            <input type="partitionCol" class="form-control" id="partitionCol" placeholder="Enter Full Col to use as partition:" data-ng-model="table.partitionCol">
+          </div>
+          <div class="form-group">
+            <label for="druidMetrics">Druid Metrics</label>
+            <input type="druidMetrics" class="form-control" id="druidMetrics" placeholder="Enter the druid metrics(cols):" data-ng-model="table.druidMetrics" required>
+          </div>
+          <div class="form-group">
+            <label for="druidDims">Druid Dimensions</label>
+            <input type="druidDims" class="form-control" id="druidDims" placeholder="Enter the druid dimensions(cols):" data-ng-model="table.druidDims" required>
+          </div>
           <div class="checkbox">
             <label><input type="checkbox"> Sure ?!?</label>
           </div>
