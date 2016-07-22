@@ -1,5 +1,5 @@
 package com.askme.ramanujan.actors
-
+/*
 import akka.actor.Actor
 import java.util.concurrent.Executors
 import com.askme.ramanujan.util.DataSource
@@ -42,3 +42,4 @@ class SQLActor(val config: Config,val sqlContext: SQLContext) extends Actor with
 		request.updateBookMark(currBookMark) // update the bookmark table - done !
 	}
 }
+*/

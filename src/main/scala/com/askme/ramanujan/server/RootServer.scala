@@ -4,31 +4,28 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{ActorRef, ActorSystem, Props}
-import akka.io.IO
-import akka.pattern.ask
-import akka.util.Timeout
 import com.askme.ramanujan.Configurable
-import com.askme.ramanujan.actors.{ApiHandler, DruidActor, Listener, WorkerActor}
+import com.askme.ramanujan.actors.{Listener, WorkerActor}
 import com.askme.ramanujan.util.DataSource
 import com.typesafe.config.Config
 import grizzled.slf4j.Logging
 import org.apache.spark.SparkContext
+import org.apache.spark.scheduler._
 import org.apache.spark.sql.SQLContext
-import spray.can.Http
 import spray.json.{DefaultJsonProtocol, _}
-
-import scala.concurrent.duration.Duration
 
 class RootServer(val config: Config) extends Configurable with Server with Logging with Serializable {
   
-    //object Holder extends Serializable {
-    // @transient lazy val log = Logger.getLogger(getClass.getName)
-    //}
+//    object Holder extends Serializable {
+//     @transient lazy val log = Logger.getLogger(getClass.getName)
+//    }
     // normal sparkContext - initialize it from conf.spark
     debug("[DEBUG] initialize the conf for spark and the spark context . . .")
 		val conf = sparkConf("spark")
 
-		val sc = SparkContext.getOrCreate(conf) // ideally this is what one must do - getOrCreate
+		val sc: SparkContext = SparkContext.getOrCreate(conf) // ideally this is what one must do - getOrCreate
+		val customSparkListener: CustomSparkListener = new CustomSparkListener()
+	  sc.addSparkListener(customSparkListener)
 
 		// one sqlContext - to pass on
 		val sqlContext = new SQLContext(sc)
@@ -76,7 +73,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		var connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 
 	  debug("[DEBUG] the initial internal db connection invoked . . .")
-		val statement = connection.createStatement()
+		//val statement = connection.createStatement()
 
 		// while 1 loop - constant poll
 
@@ -98,6 +95,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 		while(true) {
 			debug("[DEBUG] [REQUESTS] REQUESTS TABLE QUERY == SELECT * FROM "+string("db.internal.tables.requests.name"))
+			val statement = connection.createStatement()
 			val resultSet = statement.executeQuery("SELECT * FROM "+string("db.internal.tables.requests.name")) // get all requests
 
 			while(resultSet.next()){ // the values and fields are always realtime
@@ -105,6 +103,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 				val processDate = resultSet.getString(string("db.internal.tables.requests.cols.processDate"))
 				val request = resultSet.getString(string("db.internal.tables.requests.cols.request"))
 				val host = resultSet.getString(string("db.internal.tables.requests.cols.host"))
+				val port = resultSet.getString(string("db.internal.tables.requests.cols.port"))
 				val dbname = resultSet.getString(string("db.internal.tables.requests.cols.dbname"))
 				val dbtable = resultSet.getString(string("db.internal.tables.requests.cols.dbtable"))
 				// health
@@ -117,33 +116,99 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 				val exceptions = resultSet.getString(string("db.internal.tables.requests.cols.exceptions"))
 				val currentState = resultSet.getString(string("db.internal.tables.requests.cols.currentState")) // currentState
 
+				debug("[DEBUG] [RECORD 1@Atime@] processDate == "+processDate)
+				debug("[DEBUG] [RECORD 1@Atime@] request == "+request)
+				debug("[DEBUG] [RECORD 1@Atime@] host == "+host)
+				debug("[DEBUG] [RECORD 1@Atime@] port == "+port)
+				debug("[DEBUG] [RECORD 1@Atime@] dbname == "+dbname)
+				debug("[DEBUG] [RECORD 1@Atime@] dbtable == "+dbtable)
+				debug("[DEBUG] [RECORD 1@Atime@] lastStarted == "+lastStarted)
+				debug("[DEBUG] [RECORD 1@Atime@] lastEnded == "+lastEnded)
+				debug("[DEBUG] [RECORD 1@Atime@] runFrequency == "+runFrequency)
+				debug("[DEBUG] [RECORD 1@Atime@] successRuns == "+successRuns)
+				debug("[DEBUG] [RECORD 1@Atime@] failureRuns == "+failureRuns)
+				debug("[DEBUG] [RECORD 1@Atime@] exceptions == "+exceptions)
+				debug("[DEBUG] [RECORD 1@Atime@] currentState == "+currentState)
+
 				debug("[DEBUG] [REQUESTS] [WHILE 1] current dataSource == "+request.toString())
-				// val format = new SimpleDateFormat("yyyy-mm-yy hh:mm:ss")
+				// val format = new SimpleDateFormat"%Y-%m-%d %H:%M:%S")
 				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 				val lastStartedDate = format.parse(lastStarted)
 				val lastEndedDate = format.parse(lastEnded)
 
+				debug("[DEBUG] [DATES @formatted@ lastStartedDate == "+lastStartedDate)
+				debug("[DEBUG] [DATES @formatted@ lastEndedDate == "+lastEndedDate)
+
 				val currentDateDate = Calendar.getInstance().getTime()
 				val currentDateStr = format.format(currentDateDate)
 
-				if(totalRuns == 0){ // start it. the first time
-					statement.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = "+currentDateStr+" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.running")+" where "+string("db.internal.tables.requests.cols.host")+" = "+host+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbname+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbtable)
+				debug("[DEBUG] [DATES @formatted@ currentDateStr == "+currentDateStr)
+
+				def randomString(length: Int) = scala.util.Random.alphanumeric.take(length).mkString
+
+				if(totalRuns.toInt == 0){ // start it. the first time
+					// update :
+					// totalRuns ++
+					// currentStatus = RUNNING
+					// lastStarted
+					//statement.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = "+currentDateStr+" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.running")+" where "+string("db.internal.tables.requests.cols.host")+" = "+host+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbname+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbtable)
+					// id, host, db, table, request, time, hash, exception, notes
+					val hash = randomString(10)
+					debug("[DEBUG] hash @redundant@ == "+hash)
+					debug("INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+host+"','"+port+"','"+dbname+"','"+dbtable+"','"+currentDateStr+"','"+hash+"','none','started first run ever')")
+					val statement1 = connection.createStatement()
+					statement1.executeUpdate("INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+host+"','"+port+"','"+dbname+"','"+dbtable+"','"+currentDateStr+"','"+hash+"','none','started first run ever')")
+					debug("[DEBUG] inserted into running logs (STARTED) ### total Runs were 0 so far . . .")
+					debug("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbname+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbtable+"\"")
+					val statement2 = connection.createStatement()
+					statement2.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbname+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+dbtable+"\"")
 					val dataSource = transform(request) // send this message
+					debug("[DEBUG] request transformed into a @datasource@ . . .")
 					val workerActor = pipelineSystem.actorOf(Props(classOf[WorkerActor],config))
-					workerActor ! new TableMessage(listener,dataSource)
-					val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
-					druidActor ! new DruidMessage(listener,dataSource)
+					workerActor ! new TableMessage(listener,dataSource,hash)
+					debug("[DEBUG] a @@ worker actor @@ assigned")
+					//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
+					//druidActor ! new DruidMessage(listener,dataSource,hash)
 
 				}
 				else{
 					val diffInMinsEndedStarted = TimeUnit.MINUTES.convert(lastEndedDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS) // milliseconds to minutes
 					if(diffInMinsEndedStarted < 0){ // it must be either still running or failed !
+						  debug("[DEBUG] difference in minutes between @@lastStarted@@ and @@lastEnded@@ is less than ZERO . . .")
 							if(exceptions == string("db.internal.tables.requests.defs.NoException")){
-								// the previous run isnot complete yet, it is still running
+								debug("[DEBUG] the previous run is not complete yet, it is still running . . .")
 								debug("[DEBUG] [REQUESTS] [WHILE 1] still executing == "+request+" and current state == "+currentState)
 							}
 							else{
 								debug("[DEBUG] [REQUESTS] [WHILE 1] encountered exception == "+exceptions+" for dataSource == "+request)
+								debug("[DEBUG] ##re-running , ##re-trying . . .")
+								val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
+								val schedulingFrequencyParts = runFrequency.split(" ")
+								val freqUnit = schedulingFrequencyParts(0)
+								val freqDim = schedulingFrequencyParts(1)
+								val freqInMins = getMins(freqUnit,freqDim)
+								debug("[DEBUG] the scheduling frequency == "+runFrequency+" || got converted into mins() : "+freqInMins)
+								if(diffInMinsCurrentStarted > freqInMins){
+									val hash = randomString(10)
+									debug("[DEBUG] hash @redundant@ == "+hash)
+									debug("[DEBUG] [REQUESTS] [WHILE 1] it is time to run the script again . . .")
+									val statement1 = connection.createStatement()
+									statement1.executeUpdate("INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+host+"','"+port+"','"+dbname+"','"+dbtable+"','"+currentDateStr+"','"+hash+"','none','started the next run . . .')")
+									debug("[DEBUG] inserted into running logs (STARTED) . . .")
+									val statement2 = connection.createStatement()
+									statement2.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbname+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+dbtable+"\"")
+									val dataSource = transform(request) // send this message
+									debug("[DEBUG] request transformed into a @datasource@ . . .")
+									val workerActor = pipelineSystem.actorOf(Props(classOf[WorkerActor],config))
+									workerActor ! new TableMessage(listener,dataSource,hash)
+									debug("[DEBUG] a @@ worker actor @@ assigned")
+									//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
+									//druidActor ! new DruidMessage(listener,dataSource,hash)
+
+								}
+								else{
+									debug("[DEBUG] [REQUESTS] [WHILE 1] waiting to run on == "+request)
+								}
 							}
 					}
 					else {
@@ -153,21 +218,27 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 						val freqDim = schedulingFrequencyParts(1)
 						val freqInMins = getMins(freqUnit,freqDim)
 						if(diffInMinsCurrentStarted > freqInMins){
+							val hash = randomString(10)
+							debug("[DEBUG] hash @redundant@ == "+hash)
 							debug("[DEBUG] [REQUESTS] [WHILE 1] it is time to run the script again . . .")
-							statement.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = "+currentDateStr+" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.running")+" where "+string("db.internal.tables.requests.cols.host")+" = "+host+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbname+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+dbtable)
+							val statement1 = connection.createStatement()
+							statement1.executeUpdate("INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+host+"','"+port+"','"+dbname+"','"+dbtable+"','"+currentDateStr+"','"+hash+"','none','started the next run . . .')")
+							debug("[DEBUG] inserted into running logs (STARTED) . . .")
+							val statement2 = connection.createStatement()
+							statement2.executeUpdate("UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbname+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+dbtable+"\"")
 							val dataSource = transform(request) // send this message
+							debug("[DEBUG] request transformed into a @datasource@ . . .")
 							val workerActor = pipelineSystem.actorOf(Props(classOf[WorkerActor],config))
-							workerActor ! new TableMessage(listener,dataSource)
-							val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
-							druidActor ! new DruidMessage(listener,dataSource)
+							workerActor ! new TableMessage(listener,dataSource,hash)
+							debug("[DEBUG] a @@ worker actor @@ assigned")
+							//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
+							//druidActor ! new DruidMessage(listener,dataSource,hash)
 
 						}
 						else{
 							debug("[DEBUG] [REQUESTS] [WHILE 1] waiting to run on == "+request)
 						}
-
 					}
-
 				}
 			}
 		}
@@ -372,13 +443,15 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 //    }
 
   def transform(request: String) = {
-		    case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String)
+				var request_ = request.replace("u'","\"")
+				request_ = request_.replaceAll("'","\"")
+		    case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String)
 
     		object RequestJsonProtocol extends DefaultJsonProtocol {
-		  	  implicit val RequestFormat = jsonFormat11(RequestObject)
+		  	  implicit val RequestFormat = jsonFormat15(RequestObject)
 		    }
     		import RequestJsonProtocol._
-		    val jsonValue = request.parseJson
+		    val jsonValue = request_.parseJson
 		    debug("[DEBUG] [SQL] [transform json value] == "+jsonValue)
 
     		val requestObject = jsonValue.convertTo[RequestObject]
@@ -394,9 +467,13 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 				val primaryKey = requestObject.primaryKey // primaryKey
 				val conntype = requestObject.conntype // e.g com.sql.MySQL.driver
 				val fullTableSchema = requestObject.fullTableSchema // fully qualified table schema
+				val hdfsPartitionCol = requestObject.partitionCol
+				val druidMetrics = requestObject.druidMetrics
+				val druidDims = requestObject.druidDims
+				val runFrequency = requestObject.runFrequency
 				// create a datasource to connect for the above request / json / x
 				//debug("[DEBUG] [SQL] instantiating the dataSource . . .")
-				val dataSource = new DataSource(config,conntype,host,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema)
+				val dataSource = new DataSource(config,conntype,host,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,hdfsPartitionCol,druidMetrics,druidDims,runFrequency)
 		    dataSource
 		  }
 
@@ -416,10 +493,78 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
     import org.json4s.native.JsonMethods._
     parse(jsonStr).extract[Map[String, String]]
   }
+
+	class CustomSparkListener extends SparkListener {
+		override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd) {
+			debug(s"application ended at time : ${applicationEnd.time}")
+		}
+		override def onApplicationStart(applicationStart: SparkListenerApplicationStart): Unit ={
+			debug(s"[SPARK LISTENER DEBUGS] application Start app attempt id : ${applicationStart.appAttemptId}")
+			debug(s"[SPARK LISTENER DEBUGS] application Start app id : ${applicationStart.appId}")
+			debug(s"[SPARK LISTENER DEBUGS] application start app name : ${applicationStart.appName}")
+			debug(s"[SPARK LISTENER DEBUGS] applicaton start driver logs : ${applicationStart.driverLogs}")
+			debug(s"[SPARK LISTENER DEBUGS] application start spark user : ${applicationStart.sparkUser}")
+			debug(s"[SPARK LISTENER DEBUGS] application start time : ${applicationStart.time}")
+		}
+		override def onExecutorAdded(executorAdded: SparkListenerExecutorAdded): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] ${executorAdded.executorId}")
+			debug(s"[SPARK LISTENER DEBUGS] ${executorAdded.executorInfo}")
+			debug(s"[SPARK LISTENER DEBUGS] ${executorAdded.time}")
+		}
+		override  def onExecutorRemoved(executorRemoved: SparkListenerExecutorRemoved): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] the executor removed Id : ${executorRemoved.executorId}")
+			debug(s"[SPARK LISTENER DEBUGS] the executor removed reason : ${executorRemoved.reason}")
+			debug(s"[SPARK LISTENER DEBUGS] the executor temoved at time : ${executorRemoved.time}")
+		}
+
+		override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] job End id : ${jobEnd.jobId}")
+			debug(s"[SPARK LISTENER DEBUGS] job End job Result : ${jobEnd.jobResult}")
+			debug(s"[SPARK LISTENER DEBUGS] job End time : ${jobEnd.time}")
+		}
+		override def onJobStart(jobStart: SparkListenerJobStart) {
+			debug(s"[SPARK LISTENER DEBUGS] Job started with properties ${jobStart.properties}")
+			debug(s"[SPARK LISTENER DEBUGS] Job started with time ${jobStart.time}")
+			debug(s"[SPARK LISTENER DEBUGS] Job started with job id ${jobStart.jobId.toString}")
+			debug(s"[SPARK LISTENER DEBUGS] Job started with stage ids ${jobStart.stageIds.toString()}")
+			debug(s"[SPARK LISTENER DEBUGS] Job started with stages ${jobStart.stageInfos.size} : $jobStart")
+		}
+
+		override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] Stage ${stageCompleted.stageInfo.stageId} completed with ${stageCompleted.stageInfo.numTasks} tasks.")
+			debug(s"[SPARK LISTENER DEBUGS] Stage details : ${stageCompleted.stageInfo.details.toString}")
+			debug(s"[SPARK LISTENER DEBUGS] Stage completion time : ${stageCompleted.stageInfo.completionTime}")
+			debug(s"[SPARK LISTENER DEBUGS] Stage details : ${stageCompleted.stageInfo.rddInfos.toString()}")
+		}
+		override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] Stage properties : ${stageSubmitted.properties}")
+			debug(s"[SPARK LISTENER DEBUGS] Stage rddInfos : ${stageSubmitted.stageInfo.rddInfos.toString()}")
+			debug(s"[SPARK LISTENER DEBUGS] Stage submission Time : ${stageSubmitted.stageInfo.submissionTime}")
+			debug(s"[SPARK LISTENER DEBUGS] Stage submission details : ${stageSubmitted.stageInfo.details.toString()}")
+		}
+		override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] task ended reason : ${taskEnd.reason}")
+			debug(s"[SPARK LISTENER DEBUGS] task type : ${taskEnd.taskType}")
+			debug(s"[SPARK LISTENER DEBUGS] task Metrics : ${taskEnd.taskMetrics}")
+			debug(s"[SPARK LISTENER DEBUGS] task Info : ${taskEnd.taskInfo}")
+			debug(s"[SPARK LISTENER DEBUGS] task stage Id : ${taskEnd.stageId}")
+			debug(s"[SPARK LISTENER DEBUGS] task stage attempt Id : ${taskEnd.stageAttemptId}")
+			debug(s"[SPARK LISTENER DEBUGS] task ended reason : ${taskEnd.reason}")
+		}
+		override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] stage Attempt id : ${taskStart.stageAttemptId}")
+			debug(s"[SPARK LISTENER DEBUGS] stage Id : ${taskStart.stageId}")
+			debug(s"[SPARK LISTENER DEBUGS] task Info : ${taskStart.taskInfo}")
+		}
+		override def onUnpersistRDD(unpersistRDD: SparkListenerUnpersistRDD): Unit = {
+			debug(s"[SPARK LISTENER DEBUGS] the unpersist RDD id : ${unpersistRDD.rddId}")
+		}
+	}
+
 }
 
 sealed trait PipeMessage
-case class TableMessage(listener: ActorRef, dataSource: DataSource) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
-case class DruidMessage(listener: ActorRef, dataSource: DataSource) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
+case class TableMessage(listener: ActorRef, dataSource: DataSource, hash: String) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
+case class DruidMessage(listener: ActorRef, dataSource: DataSource, hash: String) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
 case class WorkerDone(dataSource: DataSource) extends PipeMessage
 case class WorkerExecuting(dataSource: DataSource) extends PipeMessage

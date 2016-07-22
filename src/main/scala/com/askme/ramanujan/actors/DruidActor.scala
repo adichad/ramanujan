@@ -42,7 +42,7 @@ class DruidActor(val config: Config) extends Actor with Configurable with Loggin
   curator.start()
 
   override def receive: Receive = {
-    case DruidMessage(listener,dataSource) => {
+    case DruidMessage(listener,dataSource,hash) => {
       val numberOfCPUs = sys.runtime.availableProcessors()
       val threadPool = Executors.newFixedThreadPool(numberOfCPUs)
       implicit val ec = ExecutionContext.fromExecutorService(threadPool)

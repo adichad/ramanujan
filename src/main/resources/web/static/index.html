@@ -1,282 +1,350 @@
 <!DOCTYPE html>
 <html lang="en" data-ng-app="ramanujan">
-<head>
-	<meta charset="utf-8">
-	<title> ¯\_(ツ)_/¯ Welcome to Ramanujan</title>
-  <link rel="stylesheet" href="css/app.css">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-  <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
-  <style>
-  .carousel-inner > .item > img,
-  .carousel-inner > .item > a > img {
-      width: 80%;
-      margin: auto;
-  }
-  </style>
-</head>
-<body data-spy="scroll" data-target=".navbar" data-offset="50">
-  <div class="jumbotron text-center" id="Intro">
-    <h2>Ramanujan - Our Reporting System Under Construction</h2>
-    <p>Ideas on building a full fledged System for good old reporting purposes</p>
-  </div>
-	<nav class="navbar navbar-inverse navbar-fixed-top">
-		<div class="container-fluid">
-			<div class="navbar-header">
-      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#myNavbar">
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-      </button>
-        <a class="navbar-brand" href="#">Ramanujan</a>
+   <head>
+      <meta charset="utf-8">
+      <title> ¯\_(ツ)_/¯ Welcome to Ramanujan</title>
+      <link rel="stylesheet" href="/web/static/css/app.css">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+      <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+      <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+      <style>
+         .carousel-inner > .item > img,
+         .carousel-inner > .item > a > img {
+         width: 80%;
+         margin: auto;
+         }
+      </style>
+   </head>
+   <body data-spy="scroll" data-target=".navbar" data-offset="50">
+      <div class="jumbotron text-center" id="Intro">
+         <h2>Ramanujan - Our Reporting System Under Construction</h2>
+         <p>Ideas on building a full fledged System for good old reporting purposes</p>
       </div>
-      <ul class="nav navbar-nav">
-        <li class="active"><a href="#Intro">Home</a></li>
-        <li><a href="#New">New Report</a></li>
-        <li><a href="#Prev">Prev Reports</a></li>
-        <li><a href="#Wiki">Wiki</a></li>
-        <li><a href="#Tuts">Tutorials</a></li>
-      </ul>
-		</div>
-	</nav>
-	<div class="well" id="New">
-    <h2> Kindly provide us with details for new Table Logging</h2>
-    <form name="new report form" data-ng-controller="ramanujanCtrl" role="form">      
-      <fieldset>
-        <legend> New Table Details: </legend>
-          <div class="form-group">
-            <label for="host">Host:</label>
-            <input type="host" class="form-control" id="host" placeholder="Enter host" data-ng-model="table.host" required>
-          </div>
-          <div class="form-group">
-            <label for="port">Port:</label>
-            <input type="port" class="form-control" id="port" placeholder="Enter port" data-ng-model="table.port" required>
-          </div>
-          <div class="form-group">
-            <label for="user">User:</label>
-            <input type="user" class="form-control" id="user" placeholder="Enter user" data-ng-model="table.user" required>
-          </div>
-          <div class="form-group">
-            <label for="password">Pass:</label>
-            <input type="password" class="form-control" id="password" placeholder="Enter password" data-ng-model="table.password" required>
-          </div>
-          <div class="form-group">
-            <label for="db">db:</label>
-            <input type="db" class="form-control" id="db" placeholder="Enter db" data-ng-model="table.db" required>
-          </div>
-          <div class="form-group">
-            <label for="table">table:</label>
-            <input type="table" class="form-control" id="table" placeholder="Enter table" data-ng-model="table.table" required>
-          </div>
-          <div class="form-group">
-            <label for="bookmark">bookmark:</label>
-            <input type="bookmark" class="form-control" id="bookmark" placeholder="Enter bookmark" data-ng-model="table.bookmark" required>
-          </div>
-          <div class="form-group">
-            <label for="bookmarkformat">Bookmark Format (ts):</label>
-            <input type="bookmarkformat" class="form-control" id="bookmarkformat" placeholder="Enter Bookmark Format (ts):" data-ng-model="table.bookmarkformat" required>
-          </div>
-          <div class="form-group">
-            <label for="primarykey">Primary Key:</label>
-            <input type="primarykey" class="form-control" id="primarykey" placeholder="Enter Primary Key:" data-ng-model="table.primaryKey" required>
-          </div>
-          <div class="form-group">
-            <label for="conntype">Connection Type:</label>
-            <input type="conntype" class="form-control" id="conntype" placeholder="Enter Connection Type:" data-ng-model="table.conntype" required>
-          </div>
-          <div class="form-group">
-            <label for="fullTableSchema">Full Table Schema(Cols):</label>
-            <input type="fullTableSchema" class="form-control" id="fullTableSchema" placeholder="Enter Full Table Schema(Cols):" data-ng-model="table.fullTableSchema" required>
-          </div>
-          <div class="form-group">
-            <label for="partitionCol">HDFS Partition Columns:</label>
-            <input type="partitionCol" class="form-control" id="partitionCol" placeholder="Enter Full Col to use as partition:" data-ng-model="table.partitionCol">
-          </div>
-          <div class="form-group">
-            <label for="druidMetrics">Druid Metrics</label>
-            <input type="druidMetrics" class="form-control" id="druidMetrics" placeholder="Enter the druid metrics(cols):" data-ng-model="table.druidMetrics" required>
-          </div>
-          <div class="form-group">
-            <label for="druidDims">Druid Dimensions</label>
-            <input type="druidDims" class="form-control" id="druidDims" placeholder="Enter the druid dimensions(cols):" data-ng-model="table.druidDims" required>
-          </div>
-          <div class="checkbox">
-            <label><input type="checkbox"> Sure ?!?</label>
-          </div>
-          <button type="submit" class="btn btn-default" data-ng-click="sendTable()" data-ng-disabled="form.$invalid">Process !</button>
-      </fieldset>
-    </form>
-  </div>
-	<div class="container-fluid" id="Prev" style="padding: 10px;">
-    <h2> View a sample/previous report</h2>
-    <p>As of now, only a fist full reports show up. The report shall be run along with usual repot notifications.</p>
-    <ul class="nav nav-tabs">
-      <li class="active"><a data-toggle="tab" href="#omniture">Omniture Report</a></li>
-      <li><a data-toggle="tab" href="#pay">Pay Report</a></li>
-      <li><a data-toggle="tab" href="#order">Order Report</a></li>
-      <li><a data-toggle="tab" href="#users">User Report</a></li>
-    </ul>
-    <div class="tab-content">
-    <div id="omniture" class="tab-pane fade in active">
-      <h3>Omniture Report</h3>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-      <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-    </div>
-    <div id="pay" class="tab-pane fade">
-      <h3>Pay Report</h3>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-    </div>
-    <div id="order" class="tab-pane fade">
-      <h3>Order Report</h3>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
-    </div>
-    <div id="users" class="tab-pane fade">
-      <h3>User Report</h3>
-      <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
-      <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
-      <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
-      <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
-      <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
-      <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
-      <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
-    </div>
-  </div>
-  <hr width=100% align=left>
-    <br><br>
-    <form role="form" name="chooseReportForm" data-ng-controller="reportCtrl" ng-init="report=none">
-      <div class="form-group">
-        <h2>Enter your own Report Script. And we will run it, under the hood.</h2>
-        <label for="comment">Script:</label>
-        <textarea data-ng-model="script" class="form-control" rows="5" id="comment">Enter the script here.</textarea>
+      <nav class="navbar navbar-inverse navbar-fixed-top">
+         <div class="container-fluid">
+            <div class="navbar-header">
+               <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#myNavbar">
+               <span class="icon-bar"></span>
+               <span class="icon-bar"></span>
+               <span class="icon-bar"></span>
+               </button>
+               <a class="navbar-brand" href="#">Ramanujan</a>
+            </div>
+            <ul class="nav navbar-nav">
+               <li class="active"><a href="#Intro">Home</a></li>
+               <li><a href="#New">New Report</a></li>
+               <li><a href="#Prev">Prev Reports</a></li>
+               <li><a href="#Health">Systems Health</a></li>
+               <li><a href="#Wiki">Wiki</a></li>
+               <li><a href="#Tuts">Tutorials</a></li>
+            </ul>
+         </div>
+      </nav>
+      <div class="well" id="New">
+         <h2> Kindly provide us with details for new Table Logging</h2>
+         <form name="new report form" data-ng-controller="ramanujanCtrl" role="form">
+            <fieldset>
+               <legend> New Table Details: </legend>
+               <div class="form-group">
+                  <label for="host">Host:</label>
+                  <input type="host" class="form-control" id="host" placeholder="Enter host" data-ng-model="table.host" required>
+               </div>
+               <div class="form-group">
+                  <label for="port">Port:</label>
+                  <input type="port" class="form-control" id="port" placeholder="Enter port" data-ng-model="table.port" required>
+               </div>
+               <div class="form-group">
+                  <label for="user">User:</label>
+                  <input type="user" class="form-control" id="user" placeholder="Enter user" data-ng-model="table.user" required>
+               </div>
+               <div class="form-group">
+                  <label for="password">Pass:</label>
+                  <input type="password" class="form-control" id="password" placeholder="Enter password" data-ng-model="table.password" required>
+               </div>
+               <div class="form-group">
+                  <label for="db">db:</label>
+                  <input type="db" class="form-control" id="db" placeholder="Enter db" data-ng-model="table.db" required>
+               </div>
+               <div class="form-group">
+                  <label for="table">table:</label>
+                  <input type="table" class="form-control" id="table" placeholder="Enter table" data-ng-model="table.table" required>
+               </div>
+               <div class="form-group">
+                  <label for="bookmark">bookmark:</label>
+                  <input type="bookmark" class="form-control" id="bookmark" placeholder="Enter bookmark" data-ng-model="table.bookmark" required>
+               </div>
+               <div class="form-group">
+                  <label for="bookmarkformat">Bookmark Format (ts):</label>
+                  <input type="bookmarkformat" class="form-control" id="bookmarkformat" placeholder="Enter Bookmark Format (ts):" data-ng-model="table.bookmarkformat" required>
+               </div>
+               <div class="form-group">
+                  <label for="primarykey">Primary Key:</label>
+                  <input type="primarykey" class="form-control" id="primarykey" placeholder="Enter Primary Key:" data-ng-model="table.primaryKey" required>
+               </div>
+               <div class="form-group">
+                  <label for="conntype">Connection Type:</label>
+                  <input type="conntype" class="form-control" id="conntype" placeholder="Enter Connection Type:" data-ng-model="table.conntype" required>
+               </div>
+               <div class="form-group">
+                  <label for="fullTableSchema">Full Table Schema(Cols):</label>
+                  <input type="fullTableSchema" class="form-control" id="fullTableSchema" placeholder="Enter Full Table Schema(Cols):" data-ng-model="table.fullTableSchema" required>
+               </div>
+               <div class="form-group">
+                  <label for="partitionCol">HDFS Partition Columns:</label>
+                  <input type="partitionCol" class="form-control" id="partitionCol" placeholder="Enter Full Col to use as partition:" data-ng-model="table.partitionCol">
+               </div>
+               <div class="form-group">
+                  <label for="druidMetrics">Druid Metrics</label>
+                  <input type="druidMetrics" class="form-control" id="druidMetrics" placeholder="Enter the druid metrics(cols):" data-ng-model="table.druidMetrics" required>
+               </div>
+               <div class="form-group">
+                  <label for="druidDims">Druid Dimensions</label>
+                  <input type="druidDims" class="form-control" id="druidDims" placeholder="Enter the druid dimensions(cols):" data-ng-model="table.druidDims" required>
+               </div>
+               <div class="form-group">
+                  <label for="runFrequency">Scheduling Frequency</label>
+                  <input type="runFrequency" class="form-control" id="runFrequency" placeholder="Enter the scheduling frequency:" data-ng-model="table.runFrequency" required>
+               </div>
+               <div class="checkbox">
+                  <label><input type="checkbox"> Sure ?!?</label>
+               </div>
+               <button type="submit" class="btn btn-default" data-ng-click="sendTable()" data-ng-disabled="form.$invalid">Process !</button>
+            </fieldset>
+         </form>
       </div>
-      <button type="submit" class="btn btn-default" data-ng-click="sendTable()" data-ng-disabled="form.$invalid">Process !</button>
-      <button type="submit" class="btn btn-default" data-ng-click="submitReport()" data-ng-disabled="form.$invalid">Submit Reports</button>
-    </form>
-  </div>
-  <div class="jumbotron text-center" id="Wiki">
-    <br>
-    <h2><u>WIKI</u></h2>
-    <h2> swipe left & right. view centre.</h2>
-    <br>
-    <div id="wikiCarousel" class="carousel slide" data-ride="carousel">
-    <ol class="carousel-indicators">
-      <li data-target="#wikiCarousel" data-slide-to="0" class="active"></li>
-      <li data-target="#wikiCarousel" data-slide-to="1"></li>
-      <li data-target="#wikiCarousel" data-slide-to="2"></li>
-    </ol>
-    <div class="carousel-inner" role="listbox">
-      <div class="item active">
-      <img src="wiki1.jpg" alt="wiki#1" width="460" height="345">
-      <div class="carousel-caption">
-        <h3>Wiki#1</h3>
+      <div class="container-fluid" id="Prev" style="padding: 10px;">
+         <h2> View a sample/previous report</h2>
+         <p>As of now, only a fist full reports show up. The report shall be run along with usual repot notifications.</p>
+         <ul class="nav nav-tabs">
+            <li class="active"><a data-toggle="tab" href="#omniture">Omniture Report</a></li>
+            <li><a data-toggle="tab" href="#pay">Pay Report</a></li>
+            <li><a data-toggle="tab" href="#order">Order Report</a></li>
+            <li><a data-toggle="tab" href="#users">User Report</a></li>
+         </ul>
+         <div class="tab-content">
+            <div id="omniture" class="tab-pane fade in active">
+               <h3>Omniture Report</h3>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+               <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+            </div>
+            <div id="pay" class="tab-pane fade">
+               <h3>Pay Report</h3>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+               <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+            </div>
+            <div id="order" class="tab-pane fade">
+               <h3>Order Report</h3>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+               <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.</p>
+            </div>
+            <div id="users" class="tab-pane fade">
+               <h3>User Report</h3>
+               <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+               <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+               <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+               <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+               <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+               <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+               <p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+            </div>
+         </div>
+         <hr width=100% align=left>
+         <br><br>
+         <form role="form" name="chooseReportForm" data-ng-controller="reportCtrl" ng-init="report=none">
+            <div class="form-group">
+               <h2>Enter your own Report Script. And we will run it, under the hood.</h2>
+               <label for="comment">Script:</label>
+               <textarea data-ng-model="script" class="form-control" rows="5" id="comment">Enter the script here.</textarea>
+            </div>
+            <button type="submit" class="btn btn-default" data-ng-click="sendTable()" data-ng-disabled="form.$invalid">Process !</button>
+            <button type="submit" class="btn btn-default" data-ng-click="submitReport()" data-ng-disabled="form.$invalid">Submit Reports</button>
+         </form>
       </div>
+      <div class="container-fluid" id="Health" style="padding: 10px;">
+         <h2>Systems Health</h2>
+         <p>Yarn Health, Druid Health, Spark Health, Pivot Expose, Metabase Expose and DB sources Health shown below : </p>
+         <ul class="nav nav-tabs">
+            <li class="active"><a data-toggle="tab" href="#yarn">Yarn Cluster Health</a></li>
+            <li><a data-toggle="tab" href="#database">DB tables Runs Health</a></li>
+         </ul>
+         <div class="tab-content">
+            <div id="yarn" class="tab-pane fade in active">
+               <h3><i>YARN SPARK DRUID</i> <u>Health</u> | <i>Pivot Metabase</i> <u>UIs</u></h3>
+               <div class="container">
+                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Yarn"><button class="btn btn-default" role="button">Yarn</button></a>
+                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Spark"><button class="btn btn-default" role="button">Spark</button></a>
+                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Druid"><button class="btn btn-default" role="button">Druid</button></a>
+                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Pivot"><button class="btn btn-default" role="button">Pivot</button></a>
+                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="YMetabase"><button class="btn btn-default" role="button">Metabase</button></a>
+               </div>
+            </div>
+            <div id="database" class="tab-pane fade">
+               <h3><u>DB Health</u></h3>
+               <h3><u>The dataSource wise statistics . . .</u></h3>
+               <h2>{{message}}</h2>
+               <pre>
+                      <table class="table table-striped">
+                        <thead>
+                            <tr>
+                              <th>Host</th>
+                              <th>Port</th>
+                              <th>DB Name</th>
+                              <th>DB Table</th>
+                              <th>Run Frequency</th>
+                              <th>Total Runs</th>
+                              <th># Success Runs</th>
+                              <th># Failure Runs</th>
+                              <th>Current State</th>
+                              <th>Exceptions</th>
+                              <th>Notes</th>
+                            </tr>
+                        </thead>
+                      <tbody>
+                          {% for index, row in records.iterrows() %}
+                            <tr>
+                              <td>{{ row["host"] }}</td>
+                              <td>{{ row["port"] }}</td>
+                              <td>{{ row["dbname"] }} </td>
+                              <td>{{ row["dbtable"] }}</td>
+                              <td>{{ row["runFrequency"] }}</td>
+                              <td>{{ row["totalRuns"] }}</td>
+                              <td>{{ row["successRuns"] }}</td>
+                              <td>{{ row["failureRuns"] }}</td>
+                              <td>{{ row["currentState"] }}</td>
+                              <td>{{ row["exceptions"] }}</td>
+                              <td>{{ row["notes"] }}</td>
+                            </tr>
+                          {% end %}
+                      </tbody>
+                    </table>
+              </pre>
+            </div>
+         </div>
+         <hr width=100% align=left>
       </div>
-      <div class="item">
-        <img src="wiki2.jpg" alt="wiki#2" width="460" height="345">
-        <div class="carousel-caption">
-        <h3>Wiki#2</h3>
-        </div>
+      <div class="jumbotron text-center" id="Wiki">
+         <br>
+         <h2><u>WIKI</u></h2>
+         <h2> swipe left & right. view centre.</h2>
+         <br>
+         <div id="wikiCarousel" class="carousel slide" data-ride="carousel">
+            <ol class="carousel-indicators">
+               <li data-target="#wikiCarousel" data-slide-to="0" class="active"></li>
+               <li data-target="#wikiCarousel" data-slide-to="1"></li>
+               <li data-target="#wikiCarousel" data-slide-to="2"></li>
+            </ol>
+            <div class="carousel-inner" role="listbox">
+               <div class="item active">
+                  <img src="/web/static/wiki1.jpg" alt="wiki#1" width="460" height="345">
+                  <div class="carousel-caption">
+                     <h3>Wiki#1</h3>
+                  </div>
+               </div>
+               <div class="item">
+                  <img src="/web/static/wiki2.jpg" alt="wiki#2" width="460" height="345">
+                  <div class="carousel-caption">
+                     <h3>Wiki#2</h3>
+                  </div>
+               </div>
+               <div class="item">
+                  <img src="/web/static/wiki3.jpg" alt="wiki#3" width="460" height="345">
+                  <div class="carousel-caption">
+                     <h3>Wiki#3</h3>
+                  </div>
+               </div>
+            </div>
+            <a class="left carousel-control" href="#wikiCarousel" role="button" data-slide="prev">
+            <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
+            <span class="sr-only">Previous</span>
+            </a>
+            <a class="right carousel-control" href="#wikiCarousel" role="button" data-slide="next">
+            <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
+            <span class="sr-only">Next</span>
+            </a>
+         </div>
       </div>
-      <div class="item">
-        <img src="wiki3.jpg" alt="wiki#3" width="460" height="345">
-        <div class="carousel-caption">
-        <h3>Wiki#3</h3>
-        </div>
+      <div class="jumbotron text-center" id="Tuts">
+         <br>
+         <h2><u>TUTS</u></h2>
+         <h2> swipe left & right. view centre.</h2>
+         <br>
+         <div id="tutsCarousel" class="carousel slide" data-ride="carousel">
+            <ol class="carousel-indicators">
+               <li data-target="#tutsCarousel" data-slide-to="0" class="active"></li>
+               <li data-target="#tutsCarousel" data-slide-to="1"></li>
+               <li data-target="#tutsCarousel" data-slide-to="2"></li>
+            </ol>
+            <div class="carousel-inner" role="listbox">
+               <div class="item active">
+                  <img src="/web/static/tuts1.jpg" alt="tuts#1" width="460" height="345">
+                  <div class="carousel-caption">
+                     <h3>Tuts#1</h3>
+                  </div>
+               </div>
+               <div class="item">
+                  <img src="/web/static/tuts2.jpg" alt="tuts#2" width="460" height="345">
+                  <div class="carousel-caption">
+                     <h3>Tuts#2</h3>
+                  </div>
+               </div>
+               <div class="item">
+                  <img src="/web/static/tuts3.jpg" alt="tuts#3" width="460" height="345">
+                  <div class="carousel-caption">
+                     <h3>Tuts#3</h3>
+                  </div>
+               </div>
+            </div>
+            <a class="left carousel-control" href="#tutsCarousel" role="button" data-slide="prev">
+            <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
+            <span class="sr-only">Previous</span>
+            </a>
+            <a class="right carousel-control" href="#tutsCarousel" role="button" data-slide="next">
+            <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
+            <span class="sr-only">Next</span>
+            </a>
+         </div>
       </div>
-    </div>
-    <a class="left carousel-control" href="#wikiCarousel" role="button" data-slide="prev">
-      <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
-      <span class="sr-only">Previous</span>
-    </a>
-    <a class="right carousel-control" href="#wikiCarousel" role="button" data-slide="next">
-      <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
-      <span class="sr-only">Next</span>
-    </a>
-  </div>
-  </div>
-  <div class="jumbotron text-center" id="Tuts">
-    <br>
-    <h2><u>TUTS</u></h2>
-    <h2> swipe left & right. view centre.</h2>
-    <br>
-    <div id="tutsCarousel" class="carousel slide" data-ride="carousel">
-    <ol class="carousel-indicators">
-      <li data-target="#tutsCarousel" data-slide-to="0" class="active"></li>
-      <li data-target="#tutsCarousel" data-slide-to="1"></li>
-      <li data-target="#tutsCarousel" data-slide-to="2"></li>
-    </ol>
-    <div class="carousel-inner" role="listbox">
-      <div class="item active">
-      <img src="tuts1.jpg" alt="tuts#1" width="460" height="345">
-      <div class="carousel-caption">
-        <h3>Tuts#1</h3>
-      </div>
-      </div>
-      <div class="item">
-        <img src="tuts2.jpg" alt="tuts#2" width="460" height="345">
-        <div class="carousel-caption">
-        <h3>Tuts#2</h3>
-        </div>
-      </div>
-      <div class="item">
-        <img src="tuts3.jpg" alt="tuts#3" width="460" height="345">
-        <div class="carousel-caption">
-        <h3>Tuts#3</h3>
-        </div>
-      </div>
-    </div>
-    <a class="left carousel-control" href="#tutsCarousel" role="button" data-slide="prev">
-      <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
-      <span class="sr-only">Previous</span>
-    </a>
-    <a class="right carousel-control" href="#tutsCarousel" role="button" data-slide="next">
-      <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
-      <span class="sr-only">Next</span>
-    </a>
-  </div>
-  </div>
-  <script src="js/jquery.js"></script>
-  <script src="js/bootstrap.js"></script>
-  <script src="js/angular.js"></script>
-  <script src="js/angular-resource.js"></script>
-  <script src="js/controllers.js"></script>
-  <script src="js/services.js"></script>
-  <script src="js/app.js"></script>
-  <!--<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.5/angular.min.js"></script>-->
-  <!--<script src="js/services.js"></script>-->
-  <!--<script src="js/app.js"></script>-->
-</body>
+      <script src="/web/static/js/jquery.js"></script>
+      <script src="/web/static/js/bootstrap.js"></script>
+      <script src="/web/static/js/angular.js"></script>
+      <script src="/web/static/js/angular-resource.js"></script>
+      <script src="/web/static/js/controllers.js"></script>
+      <script src="/web/static/js/services.js"></script>
+      <script src="/web/static/js/app.js"></script>
+      <!--<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.5/angular.min.js"></script>-->
+      <!--<script src="js/services.js"></script>-->
+      <!--<script src="js/app.js"></script>-->
+   </body>
 </html>
+

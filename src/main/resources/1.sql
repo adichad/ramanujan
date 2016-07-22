@@ -1,13 +1,25 @@
-CREATE DATABASE Ramanujan;
+CREATE DATABASE IF NOT EXISTS Ramanujan;
 USE Ramanujan;
-CREATE TABLE BookMarks(
+CREATE TABLE IF NOT EXISTS BookMarks(
    id INT NOT NULL AUTO_INCREMENT,
    primarykey VARCHAR(100) NOT NULL,
    bookmark VARCHAR(100) NOT NULL,
    PRIMARY KEY ( id )
 );
 
-CREATE TABLE Status(
+CREATE TABLE IF NOT EXISTS RunningLOGS (
+   id INT NOT NULL AUTO_INCREMENT,
+   host VARCHAR(100) NOT NULL,
+   dbname VARCHAR(100) NOT NULL,
+   dbtable VARCHAR(100) NOT NULL,
+   runTimeStamp DATETIME NOT NULL,
+   hash VARCHAR(100) NOT NULL,
+   exceptions VARCHAR(100) NOT NULL,
+   notes VARCHAR(100) NOT NULL,
+   PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS Status (
    dbname VARCHAR(100) NOT NULL,
    tablename VARCHAR(100) NOT NULL,
    primarykey VARCHAR(100) NOT NULL,
@@ -18,14 +30,21 @@ CREATE TABLE Status(
    PRIMARY KEY (qualifiedName)
 );
 
-CREATE TABLE Requests(
+CREATE TABLE IF NOT EXISTS Requests(
    processDate DATETIME,
    request VARCHAR(1024) NOT NULL,
    host VARCHAR(100) NOT NULL,
+   port VARCHAR(100) NOT NULL,
    dbname VARCHAR(100) NOT NULL,
    dbtable VARCHAR(100) NOT NULL,
    lastStarted VARCHAR(100) NOT NULL,
    lastEnded VARCHAR(100) NOT NULL,
    runFrequency VARCHAR(100) NOT NULL,
+   totalRuns INT(11) NOT NULL,
+   successRuns INT(11) NOT NULL,
+   failureRuns INT(11) NOT NULL,
+   currentState VARCHAR(64) NOT NULL,
+   exceptions VARCHAR(1024),
+   notes VARCHAR(1024), 
    PRIMARY KEY (host, dbname, dbtable)
 );

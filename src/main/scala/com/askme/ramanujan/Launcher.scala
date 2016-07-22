@@ -16,7 +16,7 @@ object Launcher extends Configurable with Logging {
   debug("[DEBUG] starting the launcher . . .")
   override protected[this] val config = configure("environment", "application", "environment_defaults", "application_defaults")
   debug("[DEBUG] config initialized . . .")
-  def main(args: Array[String]) {
+  def main(args: Array[String]) { // redundant args
 
     try {
       // hack to make configuration parameters available in logback.xml
@@ -33,9 +33,9 @@ object Launcher extends Configurable with Logging {
       val servers = map[Server]("server").values.toList // map of objects of [Server], instantiated using "server" -> .values -> .toList
       debug("[DEBUG] rootserver object has been instantiated . . .")
       debug("[DEBUG] closing the previous running instances of the rootserver . . .")
-      closeOnExit(servers) // call the close function - called before the game starts
+      //closeOnExit(servers) // call the close function - called before the game starts
       debug("[DEBUG] starting the fresh instance of the rootserver . . .")
-      servers.foreach(_.bind) // now start the servers. <rootserver>
+      //servers.foreach(_.bind) // now start the servers. <rootserver>
     } catch {
       case e: Throwable =>
         error("fatal", e)

@@ -13,7 +13,7 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import com.typesafe.config.Config
-
+/*
 //message formats for Akka Actors
 sealed trait PipeMessage
 case class StartPipeline(val config: Config,row:Row) extends PipeMessage with Configurable with Serializable {require(!row.isNullAt(row.fieldIndex("db.internal.tables.requests.cols.request")),"row cannot contain null table request values")}// a new pipeline is started for each row
@@ -71,3 +71,4 @@ class RequestHandler(val config: Config,val conf: SparkConf,val listener: ActorR
 		    dataSource
 		  }
 	  }
+*/

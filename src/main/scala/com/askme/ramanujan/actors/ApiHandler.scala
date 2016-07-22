@@ -47,7 +47,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.KafkaProducer
 import scala.collection.mutable.HashMap
 import org.apache.log4j.Logger
-
+/*
 class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Configurable with CORS with Serializable {
 
       object Holder extends Serializable {      
@@ -656,3 +656,4 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 		  internalConnection.close()	
   }
 }
+*/

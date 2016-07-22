@@ -1,0 +1,20 @@
+"host": "askmepay-prod-readreplica1.askmepay.com",
+"port": "3306",
+"database": "askmepay_multi",
+"username": "gaurav",
+"password": "gaurav@123",
+"timezone": "UTC",
+"driver": "com.mysql.jdbc.Driver"
+
+Transactions : TransactionId,TransactionType,TransactionStatus,Amount,TransactionKey,CreatedDate,CreatedBy,LastUpdatedDate,SourceTxnId,SourceVerificationStatus,storeId,initiatorUserRoleId,payerUserRoleId,loyaltyResponse,sourceIsRefundable,medium,split,isAmpg,parentTxnId,storeCode,storeName,storeUserName,storeUserId,storeLogo,refundGateway,refundGatewayTxnId,refundUpdatedOn,refundAmount
+Users : id,UserCode,UserName,FirstName,LastName,EmailAddress,Gender,DOB,status,AddressId,CreatedDate,ModifiedDate,ModifiedBy,LastLoginDate,source,UnifiedLoginId,SourceAppId,isEmailVerified,isMobileVerified,password,loginUrl,IsVerified
+
+"username": "foo"
+"password": "5Td-Hd3-HnS-vak"
+"host": "analytics-askme.curnxxtqpaar.ap-southeast-1.rds.amazonaws.com"
+"port": "3306"
+"database":"analytics"
+
+LSPdata : awb_no,pickup_date,origin_center,destination_pin,package_type,product_value,cod_amount,status,charged_weight,zone,total_amount
+
+bazaar_order : salesorderid,sourceorderid,parent_sourceorderid,accountid,sostatus,base_product_id,product_name,product_qty,order_discount,coupon_code,order_total,colour,size,modeofpayment,source_info,payment_method,shipping_comp,logistics_cost,awb_no,L1_category,L2_category,L3_category,L4_category,L5_category,L6_category,cod_charges,weight,discount_offered,total_quantity,reasonofreject,height,width,length,total_paid_amount,heavy_bulky,servicable,api_ref,source_storefront_id,source_storefront_name,source_store_id,source_type,source_id,brand_category,subscribed_product_id,website_createtime,order_type,shipping_mobile,order_priority,precious_jewellery,express_delivery,category_discount,occasion,node_category_id,node_category_name,media_url,guid,loyality_points_earned,realign,pg_discount,pg_discount_flag,loyalty_points_burned,wallet_payment,collectable_amount,transfer_price,refund_status,refund_remarks,refund_type,refund_initiated_date,refund_closed_date,product_vat,product_cst,order_uuid,lead_reason,fc_id,wallet_txn_id,wallet_id,wallet_amount,wallet_txn_status,product_pg_cashback,product_wallet_amount,product_coupon_cashback,product_pg_amount,vinculam_flag,consumer_code,customer_type,agr_id,setype,description,createdtime,modifiedtime,bill_city,bill_code,bill_state,bill_street,ship_city,ship_code,ship_state,ship_street,buyer_name,buyer_email,buyer_telephone,transaction_type,transaction_status,seller_address,seller_city,seller_state,seller_mobile,seller_pincode,details_for_cancel,store_id,seller_name,store_price,store_offer_price,bazaar_price,order_type_clean,sub_order_type,seller_type,shipping_charge

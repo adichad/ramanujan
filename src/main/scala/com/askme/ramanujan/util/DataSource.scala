@@ -1,40 +1,27 @@
 package com.askme.ramanujan.util
 
-import java.sql.DriverManager
-import dispatch.url
-import java.sql.Connection
-import com.askme.ramanujan.Configurable
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.Row
-
-import org.json4s.jackson.Serialization
-import org.json4s.NoTypeHints
-
-import kafka.producer.Producer;
-import kafka.producer.KeyedMessage;
-import kafka.producer.ProducerConfig;
-
-import java.util.{Properties,Date};
-import scala.util.Random
-import org.apache.spark.SparkContext
+import java.sql.{Connection, DriverManager}
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.types.StructField
-import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.types.IntegerType
-import org.apache.spark.SparkConf
+import java.util.{Calendar, Properties}
+
+import com.askme.ramanujan.Configurable
 import com.typesafe.config.Config
 import grizzled.slf4j.Logging
+import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
 import org.apache.log4j.Logger
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.{Row, SQLContext, SaveMode}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.json4s.NoTypeHints
+import org.json4s.jackson.Serialization
 
 
 class DataSource(val config: Config,val conntype: String, val host: String, val port: String,           
 		val user: String, val password: String, val db: String, val table: String,          
-		val bookmark: String, val bookmarkformat: String, val primarykey: String, val fullTableSchema: String) extends Configurable with Logging with Serializable{
-		  
-      object Holder extends Serializable {      
+		val bookmark: String, val bookmarkformat: String, val primarykey: String, val fullTableSchema: String,
+		val hdfsPartitionCol: String,val druidMetrics: String,val druidDims: String, val schedulingFrequency: String) extends Configurable with Logging with Serializable{
+
+	object Holder extends Serializable {
        @transient lazy val log = Logger.getLogger(getClass.getName)    
       }
   
@@ -73,6 +60,62 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		    statement.executeUpdate(insertRequestQuery)
 		    internalConnection.close()
 		  }
+			// Update insertInRunLogsPassed
+			def insertInRunLogsPassed(hash: String) = {
+				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
+				val currentDateDate = Calendar.getInstance().getTime()
+				val currentDateStr = format.format(currentDateDate)
+				internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
+				val statement = internalConnection.createStatement()
+				val insertPassLogQuery = "INSERT INTO "+string("db.internal.tables.runninglogs.name")+" ('"+string("db.internal.tables.runninglogs.host")+"','"+string("db.internal.tables.runninglogs.port")+"','"+string("db.internal.tables.runninglogs.dbname")+"','"+string("db.internal.tables.runninglogs.dbtable")+"','"+string("db.internal.tables.runninglogs.runTimeStamp")+"','"+string("db.internal.tables.runninglogs.hash")+"','"+string("db.internal.tables.runninglogs.exceptions")+"','"+string("db.internal.tables.runninglogs.notes")+"') VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+"','"+currentDateStr+"','"+hash+"','none','the run passed')"
+				statement.executeUpdate(insertPassLogQuery)
+				internalConnection.close()
+			}
+			// Update insertInRequestsPassed
+			def insertInRequestsPassed(hash: String) = {
+				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
+				val currentDateDate = Calendar.getInstance().getTime()
+				val currentDateStr = format.format(currentDateDate)
+				internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
+				val statement = internalConnection.createStatement()
+				val insertReqPassedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.success")+" = "+string("db.internal.tables.requests.cols.success")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.defaultIdleState")+string("db.internal.tables.requests.cols.lastEnded")+" = "+currentDateStr+" where "+string("db.internal.tables.requests.cols.host")+" = "+host+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+db+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+table
+				statement.executeUpdate(insertReqPassedQuery)
+				internalConnection.close()
+			}
+			// Update insertInRunLogsFailed
+			def insertInRequestsFailed(hash: String, value: Exception) = {
+				val strValue = value.toString()
+				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
+				val currentDateDate = Calendar.getInstance().getTime()
+				val currentDateStr = format.format(currentDateDate)
+				internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
+				val statement = internalConnection.createStatement()
+				val insertReqFailedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.exceptions")+" = "+strValue+" , "+string("db.internal.tables.requests.cols.failure")+" = "+string("db.internal.tables.requests.cols.failure")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.defaultIdleState")+" where "+string("db.internal.tables.requests.cols.host")+" = "+host+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+db+" and "+string("db.internal.tables.requests.cols.dbname")+" = "+table
+				statement.executeUpdate(insertReqFailedQuery)
+				internalConnection.close()
+			}
+
+			def insertInRunLogsFailed(hash: String, value: Exception) = {
+				val strValue = value.toString()
+				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
+				val currentDateDate = Calendar.getInstance().getTime()
+				val currentDateStr = format.format(currentDateDate)
+				internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
+				val statement = internalConnection.createStatement()
+				val insertFailLogQuery = "INSERT INTO "+string("db.internal.tables.runninglogs.name")+" ('"+string("db.internal.tables.runninglogs.host")+"','"+string("db.internal.tables.runninglogs.port")+"','"+string("db.internal.tables.runninglogs.dbname")+"','"+string("db.internal.tables.runninglogs.dbtable")+"','"+string("db.internal.tables.runninglogs.runTimeStamp")+"','"+string("db.internal.tables.runninglogs.hash")+"','"+string("db.internal.tables.runninglogs.exceptions")+"','"+string("db.internal.tables.runninglogs.notes")+"') VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+"','"+currentDateStr+"','"+hash+"','"+strValue+"','started the run')"
+				statement.executeUpdate(insertFailLogQuery)
+				internalConnection.close()
+			}
+			def insertInRunLogsStarted(hash: String) = {
+				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
+				val currentDateDate = Calendar.getInstance().getTime()
+				val currentDateStr = format.format(currentDateDate)
+				internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
+				val statement = internalConnection.createStatement()
+				val insertStartLogQuery = "INSERT INTO "+string("db.internal.tables.runninglogs.name")+" ('"+string("db.internal.tables.runninglogs.host")+"','"+string("db.internal.tables.runninglogs.port")+"','"+string("db.internal.tables.runninglogs.dbname")+"','"+string("db.internal.tables.runninglogs.dbtable")+"','"+string("db.internal.tables.runninglogs.runTimeStamp")+"','"+string("db.internal.tables.runninglogs.hash")+"','"+string("db.internal.tables.runninglogs.exceptions")+"','"+string("db.internal.tables.runninglogs.notes")+"') VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+"','"+currentDateStr+"','"+hash+"','none','started the run')"
+				statement.executeUpdate(insertStartLogQuery)
+				internalConnection.close()
+			}
 			// Update the current bookmark
 			def updateBookMark(currBookMark: String) = {
 			  internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
@@ -105,7 +148,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 									val id: String = resultSet.getString(string("db.internal.tables.bookmarks.cols.id"))
 									val prevBookMarkFetchQuery = "select "+string("db.internal.tables.bookmarks.cols.bookmarkId")+" from "+string("db.internal.tables.bookmarks.name")+" where "+string("db.internal.tables.bookmarks.cols.dbtablekey")+" in (\""+ key +"\") and "+string("db.internal.tables.bookmarks.cols.id")+" in ("+ id +")"
 									debug("[DEBUG] [SQL] [BookMarks] prev bookmark fetch query . . . == "+prevOffsetFetchQuery)
-									resultSet = statement.executeQuery(prevBookMarkFetchQuery)
+							    val statement1 = internalConnection.createStatement()
+									resultSet = statement1.executeQuery(prevBookMarkFetchQuery)
 									if(resultSet.next()){
 									 debug("[DEBUG] [SQL] [BookMarks] [previous bookmark] this db_table  has a row . . . == "+toString())
 										val bookmark = resultSet.getString(string("db.internal.tables.bookmarks.cols.bookmarkId"))

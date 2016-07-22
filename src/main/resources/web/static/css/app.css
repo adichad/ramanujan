@@ -47,3 +47,8 @@
 .messages > div > .username {
   font-weight: bold;
 }
+
+.blocks .btn-primary
+{
+    margin: 5px;
+}

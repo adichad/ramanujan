@@ -7,7 +7,7 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import com.typesafe.config.Config
-
+/*
 class StreamingActor(val config: Config,val conf: SparkConf,val sqlContext: SQLContext) extends Actor with Serializable{
 	// shall take responsibilities for a table request : x | SQL - Sinks
 	def receive = {
@@ -35,3 +35,4 @@ class StreamingActor(val config: Config,val conf: SparkConf,val sqlContext: SQLC
 		request.getPKs4UpdationHDFS(conf,sqlContext) // or straightaway and get rid of the wrapper func pollAndSink - HDFS 
 	}
 }
+*/
