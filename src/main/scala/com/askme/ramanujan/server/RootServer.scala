@@ -93,7 +93,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		  else freqUnit.toInt * 25200 * 4
 	  }
 
-		while(true) {
+		//while(true) {
 			debug("[DEBUG] [REQUESTS] REQUESTS TABLE QUERY == SELECT * FROM "+string("db.internal.tables.requests.name"))
 			val statement = connection.createStatement()
 			val resultSet = statement.executeQuery("SELECT * FROM "+string("db.internal.tables.requests.name")) // get all requests
@@ -241,7 +241,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 					}
 				}
 			}
-		}
+		//}
 
 		// get all the records - Requests Table
 		//debug("[DEBUG] [REQUESTS TABLE QUERY] SELECT * FROM "+string("db.internal.tables.requests.name"))
