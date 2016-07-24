@@ -47,7 +47,7 @@ class DefaultHandler(tornado.web.RequestHandler):
 			data.append(r)
 		if len(data) == 0:
 			cols = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
-			print "[DEBUG] no record entry in the Requests . . ."
+			print "[MY DEBUG STATEMENTS] no record entry in the Requests . . ."
 			df_to_show = pd.DataFrame([["N.A"] * len(cols)])
 			df_to_show.columns = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
 			health_message = "no records found ! "
@@ -61,14 +61,14 @@ class DefaultHandler(tornado.web.RequestHandler):
 			else:
 				health_message = "things look good !"
 		self.render("index.html",message=health_message,records=df_to_show)
-		print "[DEBUG] server up and running . . ."
+		print "[MY DEBUG STATEMENTS] server up and running . . ."
 
 
 class PostRequestHandler(tornado.web.RequestHandler):
 	# the random error is a trouble, and 
 	def post(self):
 		request = tornado.escape.json_decode(self.request.body)
-		print "[DEBUG] received request == "+str(request)
+		print "[MY DEBUG STATEMENTS] received request == "+str(request)
 		db = MySQLdb.connect(internalhost,internalusername,internalpassword,internaldbname)
 		cursor = db.cursor()
 		processDate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -86,14 +86,14 @@ class PostRequestHandler(tornado.web.RequestHandler):
 		currentState = defaultRunState
 		exceptions = NoExceptionsStr
 		notes = NoNotesStr
-		print "[DEBUG] the query == "+str("INSERT into Requests (processDate,request,host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes) VALUES ("+','.join([ss(processDate),ss(requestStr),ss(host),ss(port),ss(dbname),ss(dbtable),ss(lastStarted),ss(lastEnded),ss(runFrequency),ss(totalRuns),ss(successRuns),ss(failureRuns),ss(currentState),ss(exceptions),ss(notes)])+");")
+		print "[MY DEBUG STATEMENTS] the query == "+str("INSERT into Requests (processDate,request,host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes) VALUES ("+','.join([ss(processDate),ss(requestStr),ss(host),ss(port),ss(dbname),ss(dbtable),ss(lastStarted),ss(lastEnded),ss(runFrequency),ss(totalRuns),ss(successRuns),ss(failureRuns),ss(currentState),ss(exceptions),ss(notes)])+");")
 		try:
 			cursor.execute("INSERT into Requests (processDate,request,host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes) VALUES ("+','.join([ss(processDate),ss(requestStr),ss(host),ss(port),ss(dbname),ss(dbtable),ss(lastStarted),ss(lastEnded),ss(runFrequency),ss(totalRuns),ss(successRuns),ss(failureRuns),ss(currentState),ss(exceptions),ss(notes)])+");")
 			db.commit()
 		except:
 			db.rollback()
 		db.close()
-		print "[DEBUG] inserted request . . ."
+		print "[MY DEBUG STATEMENTS] inserted request . . ."
 
 
 
@@ -101,7 +101,7 @@ class PostRequestHandler(tornado.web.RequestHandler):
 class PostReportHandler(tornado.web.RequestHandler):
 	def post(self):
 		report = tornado.escape.json_decode(self.request.body)
-		print "[DEBUG] received report == "+str(report)
+		print "[MY DEBUG STATEMENTS] received report == "+str(report)
 		
 class Application(tornado.web.Application):
 	def __init__(self):

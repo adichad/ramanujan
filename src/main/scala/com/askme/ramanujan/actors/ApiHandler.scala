@@ -113,7 +113,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 		      	
 		    val internalURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+internalHost+":"+internalPort+"/"+internalDB) // the internal connection DB <status, bookmark, requests> etc
         
-        Holder.log.debug("[DEBUG] [REQUEST] [API] request received == "+request)
+        Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] request received == "+request)
         case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String)
 
     		object RequestJsonProtocol extends DefaultJsonProtocol {
@@ -121,7 +121,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 		    }
     		import RequestJsonProtocol._
     		val jsonValue = request.parseJson
-    		Holder.log.debug("[DEBUG] [REQUEST] [API] the json value == "+jsonValue)
+    		Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] the json value == "+jsonValue)
 
     		val requestObject = jsonValue.convertTo[RequestObject]
 	      val host = requestObject.host // e.g 10.0.16.98
@@ -141,19 +141,19 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
     		var sc = SparkContext.getOrCreate(conf)
     		var sqlContext = new SQLContext(sc);
 		    
-    		Holder.log.debug("[DEBUG] [REQUEST] [API] the dataSource formed == "+dataSource.toString())
+    		Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] the dataSource formed == "+dataSource.toString())
     		import scala.concurrent._ // brute force imported
     	val numberOfCPUs = sys.runtime.availableProcessors() // brute force imported
 	    val threadPool = Executors.newFixedThreadPool(numberOfCPUs) // brute force imported
 	    implicit val ec = ExecutionContext.fromExecutorService(threadPool) // brute force imported
-	    Holder.log.debug("[DEBUG] [REQUEST] [API] doing the SQL-SQL flow for == "+dataSource.db+"_"+dataSource.table)
-	    Holder.log.debug("[DEBUG] [REQUEST] [API] obtaining the previous, the current and the affected PKs")
+	    Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] doing the SQL-SQL flow for == "+dataSource.db+"_"+dataSource.table)
+	    Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] obtaining the previous, the current and the affected PKs")
 	    var prevBookMark = dataSource.getPrevBookMark()
-	    Holder.log.debug("[DEBUG] [REQUEST] [API] the previous bookmark == "+prevBookMark)
+	    Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] the previous bookmark == "+prevBookMark)
 	    var currBookMark = dataSource.getCurrBookMark()
-	    Holder.log.debug("[DEBUG] the current bookmark == "+currBookMark)
+	    Holder.log.debug("[MY DEBUG STATEMENTS] the current bookmark == "+currBookMark)
 	    var PKsAffectedDF = dataSource.getAffectedPKs(prevBookMark,currBookMark)
-	    Holder.log.debug("[DEBUG] [REQUEST] [API] the count of PKs returned == "+PKsAffectedDF.count())
+	    Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] the count of PKs returned == "+PKsAffectedDF.count())
 	    if(PKsAffectedDF.rdd.isEmpty()){
 		      Holder.log.info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
 		  }
@@ -192,7 +192,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 		      prop.setProperty("user",string("db.internal.user"))
 		      prop.setProperty("password", string("db.internal.password"))
 		      
-		      Holder.log.debug("[DEBUG] the internal db connections evoked . . .")
+		      Holder.log.debug("[MY DEBUG STATEMENTS] the internal db connections evoked . . .")
       				      
 		      if(statusRecordsDB.rdd.isEmpty()){
 		        // straightaway write the PKsAffectedDF dataframe into status table, overriding it.
@@ -309,7 +309,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
     	   * for the timebeing . . .
     	   * 
 				else if(conntype.contains(string("db.type.postgres"))){
-				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == postgres")
+				  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] db entered was == postgres")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "org.postgresql.Driver"
@@ -318,7 +318,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 									)
 							).load()
 							val row_to_insert: Row = jdbcDF.first()
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] got the row . . .")
 							var rowMap:Map[String,String] = Map()
 							val fullTableSchemaArr = map_db.get("fullTableSchema").get.split(",")
 							for(i <- 0 until fullTableSchemaArr.length) {
@@ -327,15 +327,15 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 					    implicit val formats = Serialization.formats(NoTypeHints)
 					    val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 					    val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-					    Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					    Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 					    producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-					    Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					    Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] published the clean string . . .")
 					    // KAFKA Over
 					    updateTargetIdsBackKafka(db,table,pk,bkmk)
 					    "[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else if(conntype.contains(string("db.type.sqlserver"))){
-				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == sqlserver")
+				  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] db entered was == sqlserver")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
@@ -344,7 +344,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 									)
 							).load()
 							val row_to_insert: Row = jdbcDF.first()
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] got the row . . .")
 							var rowMap:Map[String,String] = Map()
 							val fullTableSchemaArr = map_db.get("fullTableSchema").get.split(",")
 							for(i <- 0 until fullTableSchemaArr.length) {
@@ -353,15 +353,15 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 							implicit val formats = Serialization.formats(NoTypeHints)
 							val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 							val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 							producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] published the clean string . . .")
 							// KAFKA Over
 							updateTargetIdsBackKafka(db,table,pk,bkmk)
 							"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else{
-				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] nothing to publish . . .")
+				  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] nothing to publish . . .")
 				  // no need to send it to either of kafka or hdfs
 					// no supported DB type - return a random string with fullTableSchema
 				  val fullTableSchemaArr = map_db.get("fullTableSchema").get.split(",")
@@ -383,11 +383,11 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 			kafkaWrapper1.sinkMapper(jdbcDF)
 			
 			if(jdbcDF.rdd.isEmpty()){
-								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
 								  //Holder.log.info("no persistences done to the kafka sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
 	    }
     	else{
-								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
   								jdbcDF.map { x => {
   								                    //val conf = sparkConf("spark");
   								                    //val sc=SparkContext.getOrCreate(conf);
@@ -416,11 +416,11 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 								).load()
 								
 			if(jdbcDF.rdd.isEmpty()){
-								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [PKs] [KAFKA] an empty DF of PKs for == "+db_to_query+"_"+table_to_query)
 								  //Holder.log.info("no persistences done to the kafka sinks whatsoever . . . for == "+db_to_query+"_"+table_to_query)
 	    }
     	else{
-								  Holder.log.debug("[DEBUG] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
+								  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [PKs] [KAFKA] going to persist into == "+db_to_query+"_"+table_to_query)
   								jdbcDF.map { x => {
   								                    val conf = sparkConf("spark");
   								                    val sc=SparkContext.getOrCreate(conf);
@@ -444,26 +444,26 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 		 		* 4. upsert the things from 3.
 		 		* 5. current offset is appended to the bookmark table
 				*/
-    		Holder.log.debug("[DEBUG] [REQUEST] [API] doing the SQL-SQL flow for == "+dataSource.db+"_"+dataSource.table)
-		    Holder.log.debug("[DEBUG] [REQUEST] [API] obtaining the previous, the current and the affected PKs")
+    		Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] doing the SQL-SQL flow for == "+dataSource.db+"_"+dataSource.table)
+		    Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] obtaining the previous, the current and the affected PKs")
         var prevBookMark = dataSource.getPrevBookMark() // get the previous bookmark - key,max(autoincr.) group by key filter key -> bookmark / ts | db.internal.tables.bookmarks.defs.defaultBookMarkValue for first time
-		    Holder.log.debug("[DEBUG] [REQUEST] [API] the previous bookmark == "+prevBookMark)
+		    Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] the previous bookmark == "+prevBookMark)
         var currBookMark = dataSource.getCurrBookMark(sqlContext) // get the latest / maximum bookmark / ts | db.internal.tables.bookmarks.defs.defaultBookMarkValue for first time
-		    Holder.log.debug("[DEBUG] the current bookmark == "+currBookMark)
+		    Holder.log.debug("[MY DEBUG STATEMENTS] the current bookmark == "+currBookMark)
         var PKsAffectedDF = dataSource.getAffectedPKs(sqlContext,prevBookMark,currBookMark) // distinct PKs and max(timestamp) + WHERE clause | same as PKs, timestamp if not a log table, and PKs / timestamp otherwise | could be empty also
-		    Holder.log.debug("[DEBUG] [REQUEST] [API] the count of PKs returned == "+PKsAffectedDF.count())
+		    Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] the count of PKs returned == "+PKsAffectedDF.count())
         if(PKsAffectedDF.rdd.isEmpty()){
 		      Holder.log.info("[SQL] no records to upsert in the internal Status Table == for bookmarks : "+prevBookMark+" ==and== "+currBookMark+" for table == "+dataSource.db+"_"+dataSource.table)
 		    }
 		    else{
-		      Holder.log.debug("[DEBUG] [REQUEST] [API] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
+		      Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] mapping the rows of affected PKs one by one / batch maybe onto STATUS table . . .")
 		      PKsAffectedDF.map { x => dataSource.upsert(x(0).toString(),x(1).toString()) } // assuming x(0) / x(1) converts to string with .toString() | insert db / table / primaryKey / sourceId / 0asTargetId
 		    }
 		    dataSource.updateBookMark(currBookMark) // update the bookmark table - done !
 	      }(ExecutionContext.Implicits.global) onSuccess { // future onsuccess check
 	        case _ => Holder.log.info("[SQL] [COMPLETED] =/="+dataSource.toString()) // ack message on success
 	      }
-	      Holder.log.debug("[DEBUG] [REQUEST] [API] [SQL] still executing == "+dataSource.toString())
+	      Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] [SQL] still executing == "+dataSource.toString())
 	      Holder.log.info("[SQL] [EXECUTING] =/="+dataSource.toString())
 	      //sender ! new SQLExecuting(config,request)
 	      Future {
@@ -472,7 +472,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 	      }(ExecutionContext.Implicits.global) onSuccess {
 	        case _ => Holder.log.info("[STREAMING] [COMPLETED] =/="+dataSource.toString()) // ack message on success
 	      }
-	      Holder.log.debug("[DEBUG] [REQUEST] [API] [STREAMING] still executing == "+dataSource.toString())
+	      Holder.log.debug("[MY DEBUG STATEMENTS] [REQUEST] [API] [STREAMING] still executing == "+dataSource.toString())
     	  Holder.log.info("[STREAMING] [EXECUTING] =/="+dataSource.toString())
 		    */
       }
@@ -522,10 +522,10 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 
   def fetchFromFactTableAndSinkKafka(x: Row,sqlContext: SQLContext,conntype: String,ofullTableSchema: String,
       host: String, port: String, db: String, table: String, user: String, password: String, primarykey: String, bookmark: String) : String = { // had to explicitly do that
-			  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] entered the row-by-row sink . . .")
+			  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] entered the row-by-row sink . . .")
 				val pk = x.getString(0) // get pk from the row
 				val bkmk = x.getString(1) // get bookmark from row
-				Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] doing it for == "+pk)
+				Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] doing it for == "+pk)
 				
 				val props = new Properties()
 				props.put("metadata.broker.list", string("sinks.kafka.brokers"))
@@ -537,7 +537,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 			  val producer = new Producer[String,String](config)
 				
 				if(conntype.contains(string("db.type.mysql"))){ // selecting entire rows - insertion into kafka as json and hdfs as ORC
-				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == mysql")
+				  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] db entered was == mysql")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype,
@@ -546,7 +546,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 									)
 							).load()
 					val row_to_insert: Row = jdbcDF.first()
-					Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+					Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] got the row . . .")
 					var rowMap:Map[String,String] = Map()
 					val fullTableSchemaArr = ofullTableSchema.split(",")
 					for(i <- 0 until fullTableSchemaArr.length) {
@@ -555,15 +555,15 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 					implicit val formats = Serialization.formats(NoTypeHints)
 					val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 					val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-					Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 					producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-					Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] published the clean string . . .")
 					// KAFKA Over
 					updateTargetIdsBackKafka(db,table,pk,bkmk)
 					"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else if(conntype.contains(string("db.type.postgres"))){
-				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == postgres")
+				  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] db entered was == postgres")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "org.postgresql.Driver"
@@ -572,7 +572,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 									)
 							).load()
 							val row_to_insert: Row = jdbcDF.first()
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] got the row . . .")
 							var rowMap:Map[String,String] = Map()
 							val fullTableSchemaArr = ofullTableSchema.split(",")
 							for(i <- 0 until fullTableSchemaArr.length) {
@@ -581,15 +581,15 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 					    implicit val formats = Serialization.formats(NoTypeHints)
 					    val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 					    val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-					    Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+					    Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 					    producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-					    Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+					    Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] published the clean string . . .")
 					    // KAFKA Over
 					    updateTargetIdsBackKafka(db,table,pk,bkmk)
 					    "[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else if(conntype.contains(string("db.type.sqlserver"))){
-				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] db entered was == sqlserver")
+				  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] db entered was == sqlserver")
 					val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 							Map(
 									"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
@@ -598,7 +598,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 									)
 							).load()
 							val row_to_insert: Row = jdbcDF.first()
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] got the row . . .")
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] got the row . . .")
 							var rowMap:Map[String,String] = Map()
 							val fullTableSchemaArr = ofullTableSchema.split(",")
 							for(i <- 0 until fullTableSchemaArr.length) {
@@ -607,15 +607,15 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 							implicit val formats = Serialization.formats(NoTypeHints)
 							val json_to_insert = Serialization.write(rowMap) // to be relayed to kafka
 							val cleanStr = preprocess(json_to_insert) // for all kinds of preprocessing - left empty
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] the clean string to insert into Kafka == "+cleanStr)
 							producer.send(new KeyedMessage[String,String](("[TOPIC] "+db+"_"+table),db,cleanStr)) // topic + key + message
-							Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] published the clean string . . .")
+							Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] published the clean string . . .")
 							// KAFKA Over
 							updateTargetIdsBackKafka(db,table,pk,bkmk)
 							"[STREAMING] [KAFKA] updations EXITTED successfully == "+db+"_and_"+table+"_and_"+pk+"_and_"+bkmk
 				}
 				else{
-				  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] nothing to publish . . .")
+				  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] nothing to publish . . .")
 				  // no need to send it to either of kafka or hdfs
 					// no supported DB type - return a random string with fullTableSchema
 				  val fullTableSchemaArr = ofullTableSchema.split(",")
@@ -633,7 +633,7 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 			}
 
   def preprocess(fetchFromFactTableString: String) = { // for all kinds of preprocessing - left empty
-      Holder.log.debug("[DEBUG] [STREAMING] preprocessing func called . . .")
+      Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] preprocessing func called . . .")
 		  fetchFromFactTableString
 		}
 
@@ -647,12 +647,12 @@ class ApiHandler(val config: Config) extends HttpServiceActor with Actor with Co
 		      	
 		  val internalURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+internalHost+":"+internalPort+"/"+internalDB) // the internal connection DB <status, bookmark, requests> etc
 
-      Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] update the targets back . . .")
+      Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] update the targets back . . .")
       val internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		  val statement = internalConnection.createStatement()
 			val updateTargetQuery = "UPDATE "+string("db.internal.tables.status.name")+" SET "+string("db.internal.tables.status.cols.kafkaTargetId")+"="+string("db.internal.tables.status.cols.sourceId")+" where "+string("db.internal.tables.status.cols.primarykey")+"="+pk+" and "+(string("db.internal.tables.status.cols.sourceId"))+"="+bkmrk+";"
 		  statement.executeQuery(updateTargetQuery) // perfectly fine if another upsert might have had happened in the meanwhile
-		  Holder.log.debug("[DEBUG] [STREAMING] [KAFKA] updated == "+pk+"_"+bkmrk)
+		  Holder.log.debug("[MY DEBUG STATEMENTS] [STREAMING] [KAFKA] updated == "+pk+"_"+bkmrk)
 		  internalConnection.close()	
   }
 }

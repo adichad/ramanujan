@@ -13,9 +13,9 @@ object Launcher extends Configurable with Logging {
      @transient lazy val log = Logger.getLogger(getClass.getName)    
   }
   
-  debug("[DEBUG] starting the launcher . . .")
+  debug("[MY DEBUG STATEMENTS] starting the launcher . . .")
   override protected[this] val config = configure("environment", "application", "environment_defaults", "application_defaults")
-  debug("[DEBUG] config initialized . . .")
+  debug("[MY DEBUG STATEMENTS] config initialized . . .")
   def main(args: Array[String]) { // redundant args
 
     try {
@@ -25,16 +25,16 @@ object Launcher extends Configurable with Logging {
       info("Log path: " + string("log.path.current"))
       info("creating it, the Log path: . . .")
       new java.io.File(string("log.path.current")).mkdirs
-      debug("[DEBUG] backfilling completed . . .")
+      debug("[MY DEBUG STATEMENTS] backfilling completed . . .")
       writePID(string("daemon.pidfile"))
       if (boolean("sysout.detach")) System.out.close()
       if (boolean("syserr.detach")) System.err.close()
-      debug("[DEBUG] going to initialize the rootserver . . .")
+      debug("[MY DEBUG STATEMENTS] going to initialize the rootserver . . .")
       val servers = map[Server]("server").values.toList // map of objects of [Server], instantiated using "server" -> .values -> .toList
-      debug("[DEBUG] rootserver object has been instantiated . . .")
-      debug("[DEBUG] closing the previous running instances of the rootserver . . .")
+      debug("[MY DEBUG STATEMENTS] rootserver object has been instantiated . . .")
+      debug("[MY DEBUG STATEMENTS] closing the previous running instances of the rootserver . . .")
       //closeOnExit(servers) // call the close function - called before the game starts
-      debug("[DEBUG] starting the fresh instance of the rootserver . . .")
+      debug("[MY DEBUG STATEMENTS] starting the fresh instance of the rootserver . . .")
       //servers.foreach(_.bind) // now start the servers. <rootserver>
     } catch {
       case e: Throwable =>
