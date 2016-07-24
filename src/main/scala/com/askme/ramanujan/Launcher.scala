@@ -5,37 +5,29 @@ import java.lang.management.ManagementFactory
 
 import com.askme.ramanujan.server.Server
 import grizzled.slf4j.Logging
-import org.apache.log4j.Logger
 
 object Launcher extends Configurable with Logging {
   
-  object Holder extends Serializable {      
-     @transient lazy val log = Logger.getLogger(getClass.getName)    
-  }
-  
-  debug("[MY DEBUG STATEMENTS] starting the launcher . . .")
   override protected[this] val config = configure("environment", "application", "environment_defaults", "application_defaults")
-  debug("[MY DEBUG STATEMENTS] config initialized . . .")
   def main(args: Array[String]) { // redundant args
-
     try {
       // hack to make configuration parameters available in logback.xml
       backFillSystemProperties("component.name", "log.path.current", "log.path.archive", "log.level") // from reference.conf + environment_defaults.conf
+
       info(string("component.name")) // instance.fqn <- cluster.name <- component.name+env.name
       info("Log path: " + string("log.path.current"))
-      info("creating it, the Log path: . . .")
+
       new java.io.File(string("log.path.current")).mkdirs
-      debug("[MY DEBUG STATEMENTS] backfilling completed . . .")
       writePID(string("daemon.pidfile"))
+
       if (boolean("sysout.detach")) System.out.close()
       if (boolean("syserr.detach")) System.err.close()
-      debug("[MY DEBUG STATEMENTS] going to initialize the rootserver . . .")
+
       val servers = map[Server]("server").values.toList // map of objects of [Server], instantiated using "server" -> .values -> .toList
-      debug("[MY DEBUG STATEMENTS] rootserver object has been instantiated . . .")
-      debug("[MY DEBUG STATEMENTS] closing the previous running instances of the rootserver . . .")
+
       //closeOnExit(servers) // call the close function - called before the game starts
-      debug("[MY DEBUG STATEMENTS] starting the fresh instance of the rootserver . . .")
       //servers.foreach(_.bind) // now start the servers. <rootserver>
+
     } catch {
       case e: Throwable =>
         error("fatal", e)
