@@ -90,19 +90,19 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	}
 	// Update insertInRunLogsFailed
 	def updateInRequestsFailed(hash: String, value: Exception) = {
-		val strValue = value.toString()
+		val strValue = value.toString().substring(0,100)
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		val insertReqFailedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.exceptions")+" = \""+strValue.replaceAll("[^ a-zA-Z]", "")+"\" , "+string("db.internal.tables.requests.cols.failure")+" = "+string("db.internal.tables.requests.cols.failure")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.defaultIdleState")+" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+db+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+table+"\""
+		val insertReqFailedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.exceptions")+" = \""+strValue.replaceAll("[^ a-zA-Z]", "")+"\" , "+string("db.internal.tables.requests.cols.failure")+" = "+string("db.internal.tables.requests.cols.failure")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultIdleState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+db+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+table+"\""
 		statement.executeUpdate(insertReqFailedQuery)
 		internalConnection.close()
 	}
 
 	def insertInRunLogsFailed(hash: String, value: Exception) = {
-		val strValue = value.toString()
+		val strValue = value.toString().substring(0,100)
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
 		val currentDateStr = format.format(currentDateDate)
@@ -273,7 +273,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				Map(
 					"driver" -> conntype,
 					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
-					"dbtable" -> ("(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
+					"dbtable" -> ("(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" order by "+bookmark+" desc limit 100) overtmp")
+					//"dbtable" -> ("(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\") overtmp")
 					//"dbtable" -> ("(select \""+db+"\" as "+string("db.internal.tables.status.cols.dbname")+", \""+table+"\" as "+string("db.internal.tables.status.cols.dbtable")+", "+primarykey+" as "+string("db.internal.tables.status.cols.primarykey")+", max("+bookmark+") as "+string("db.internal.tables.status.cols.sourceId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.kafkaTargetId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.hdfsTargetId")+", concat(\'"+db+"_"+table+"_\',"+primarykey+") as "+string("db.internal.tables.status.cols.qualifiedName")+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp") // table specific
 				)
 			).load()

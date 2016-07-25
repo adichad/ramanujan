@@ -106,7 +106,6 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 				freqScalar.toInt * 10080 // ok if hardcoded
 		  }
 		  else {
-				debug("[MY DEBUG STATEMENTS] [GET RUN FREQUENCY(in mins)] ambiguous scheduling frequency input, did you mean $something WEEKS ?")
 				freqScalar.toInt * 25200 * 4
 			}
 	  }
@@ -187,6 +186,8 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 								val freqScalar = schedulingFrequencyParts(0)
 								val freqUnitMeasure = schedulingFrequencyParts(1)
+								debug("[MY DEBUG TEMP] "+freqScalar)
+								debug("[MY DEBUG TEMP] "+freqUnitMeasure)
 								val freqInMins = getMins(freqScalar,freqUnitMeasure)
 								//debug("[MY DEBUG STATEMENTS] the scheduling frequency == "+runFrequency+" || got converted into mins() : "+freqInMins)
 
