@@ -77,11 +77,12 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
       if(!parentPathExistsBefore){
         hdfs.mkdirs(new Path(parentHDFSPath))
-        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_"+(dataSource.host).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.db).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.table).replaceAll("[^a-zA-Z]", "")+" ("+dataSource.getColAndType()+") ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' COMMENT '"+dataSource.host+"_"+dataSource.db+"_"+dataSource.table+"' PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING)"// STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_"+(dataSource.host).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.db).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.table).replaceAll("[^a-zA-Z]", "")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_"+(dataSource.host).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.db).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.table).replaceAll("[^a-zA-Z]", "")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         val hiveCreateTableStmt = hiveCon.createStatement()
         val createTableRes = hiveCreateTableStmt.execute(parentTableCreateQuery)
 
-        debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         debug("[MY DEBUG STATEMENTS] [CREATE TABLES] create table statement executed . . . ")
         //hiveContext.sql(parentTableCreateQuery)
       }
@@ -93,8 +94,8 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
       if (partitionExistsBefore) {
         debug("[MY DEBUG STATEMENTS] [HDFS] [DUMP] The path was present before == " + hdfspath)
-        //val partitionb4df = sqlContext.read.parquet(hdfspath).toDF((dataSource.fullTableSchema + ",partition").split(','): _*) //(dataSource.fullTableSchema)
-        val partitionb4df = sqlContext.read.format("com.databricks.spark.csv").option("inferSchema","true").option("delimiter","\\t").load(hdfspath)
+        val partitionb4df = sqlContext.read.parquet(hdfspath).toDF((dataSource.fullTableSchema + ",partition").split(','): _*) //(dataSource.fullTableSchema)
+        //val partitionb4df = sqlContext.read.format("com.databricks.spark.csv").option("inferSchema","true").option("delimiter",",").load(hdfspath)
 
         val w = Window.partitionBy(col(dataSource.primarykey)).orderBy(col((dataSource.bookmark)).desc)
         val df_dedupe_ = df_.sort(col(dataSource.primarykey),col(dataSource.bookmark).desc).dropDuplicates(Seq(dataSource.primarykey))
@@ -109,12 +110,14 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
         val persistPartitionAfterdf = prunedPartitionb4df.unionAll(df_dedupe_)
         //persistPartitionAfterdf.write.format("parquet").mode("overwrite").save(hdfspathTemp)
-        persistPartitionAfterdf.write.format("com.databricks.spark.csv").option("delimiter","\\t").save(hdfspathTemp)
+        persistPartitionAfterdf.write.format("parquet").mode("overwrite").save(hdfspathTemp)
+        //persistPartitionAfterdf.write.format("com.databricks.spark.csv").option("delimiter",",").save(hdfspathTemp)
 
         hdfs.delete(new org.apache.hadoop.fs.Path(hdfspath),true)
         hdfs.rename(new org.apache.hadoop.fs.Path(hdfspathTemp),new org.apache.hadoop.fs.Path(hdfspath))
         hdfs.delete(new org.apache.hadoop.fs.Path(hdfspathTemp),true)
 
+        affectedPKsBrdcst.unpersist()
         //affectedPKsBrdcst.destroy()
       }
       else {
@@ -122,13 +125,13 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
         val w = Window.partitionBy(col(dataSource.primarykey)).orderBy(col((dataSource.bookmark)).desc)
         val df_dedupe_ = df_.sort(col(dataSource.primarykey),col(dataSource.bookmark).desc).dropDuplicates(Seq(dataSource.primarykey))
 
-        //df_dedupe_.write.format("parquet").mode("overwrite").save(hdfspath)
-        df_dedupe_.write.format("com.databricks.spark.csv").option("delimiter","\\t").save(hdfspath)
+        df_dedupe_.write.format("parquet").mode("overwrite").save(hdfspath)
+        //df_dedupe_.write.format("com.databricks.spark.csv").option("delimiter",",").save(hdfspath)
 
         val partitionAddQuery = "ALTER TABLE hive_table_"+(dataSource.host).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.db).replaceAll("[^a-zA-Z]", "")+"_"+(dataSource.table).replaceAll("[^a-zA-Z]", "")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
+        debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+partitionAddQuery)
         val hiveAddPartitionStmt = hiveCon.createStatement()
         val addPartitionHiveRes = hiveAddPartitionStmt.execute(partitionAddQuery)
-        debug("[HIVE QUERY] == "+partitionAddQuery)
         //hiveContext.sql(partitionAddQuery)
       }
     }
@@ -143,7 +146,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
     val PKsAffectedDF_json = PKsAffectedDF_partition.toJSON
 
-    sinkToKaphka(PKsAffectedDF_json,dbname,dbtable)
+    //sinkToKaphka(PKsAffectedDF_json,dbname,dbtable) // might toggle kafka push on and off.
 
     makePartitionsManageHive(keys,byPartitionArray,dbname, dbtable, dataSource,hiveCon)
   }
@@ -152,7 +155,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
     case TableMessage(listener, dataSource, hash) => {
 
-      listener ! "[MY DEBUG STATEMENTS] [SINK RUNS]Starting to sink the following datasource == " + dataSource.toString()
+      listener ! "[MY DEBUG STATEMENTS] [SINK RUNS] Starting to sink the following datasource == " + dataSource.toString()
 
       val hiveDriver = string("db.conn.hive.driver")
       Class.forName(hiveDriver)
@@ -173,9 +176,9 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
       val future = Future {
         //try {
           prevBookMark = dataSource.getPrevBookMark()
-          debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the previous bookmark == " + prevBookMark + "##for## datasource == " + dataSource.toString())
+          debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the previous bookmark == " + prevBookMark + " ##for## datasource == " + dataSource.toString())
           currBookMark = dataSource.getCurrBookMark()
-          debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the current bookmark == " + currBookMark + "##for## datasource == " + dataSource.toString())
+          debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the current bookmark == " + currBookMark + " ##for## datasource == " + dataSource.toString())
 
           val PKsAffectedDF: DataFrame = dataSource.getAffectedPKs(prevBookMark, currBookMark)
           val affectedPKsCount: Long = PKsAffectedDF.count()
@@ -216,8 +219,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
             sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource, hiveCon)
 
-            debug("[MY DEBUG STATEMENTS] inserting/updating the running logs and current bookmark for this db + table into BOOKMARKS table . . .")
-            //dataSource.insertInRunLogsPassed(hash)
+              //dataSource.insertInRunLogsPassed(hash)
             //dataSource.updateInRequestsPassed(hash)
             //dataSource.updateBookMark(currBookMark)
             "[MY DEBUG STATEMENTS] run completed."
@@ -234,6 +236,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
       }(ExecutionContext.Implicits.global) onComplete {
         case Success(value) => {
           listener ! "[MY DEBUG STATEMENTS] [FUTURE] [COMPLETE] Completed Successfully a run for the datasource == " + dataSource.toString()
+          debug("[MY DEBUG STATEMENTS] inserting/updating the running logs and current bookmark for this db + table into BOOKMARKS table . . .")
           dataSource.insertInRunLogsPassed(hash)
           dataSource.updateInRequestsPassed(hash)
           dataSource.updateBookMark(currBookMark)
@@ -247,7 +250,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
         }
       }
-      listener ! "[MY DEBUG STATEMENTS] [FUTURE] [EXECUTING] Completed Successfully a run for the datasource == " + dataSource.toString()
+      listener ! "[MY DEBUG STATEMENTS] [FUTURE] [EXECUTING] Executing a run for the datasource == " + dataSource.toString()
     }
   }
 }

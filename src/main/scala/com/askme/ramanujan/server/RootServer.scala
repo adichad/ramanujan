@@ -155,7 +155,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 				val exceptions = resultSet.getString(string("db.internal.tables.requests.cols.exceptions"))
 				val notes = resultSet.getString(string("db.internal.tables.requests.cols.notes"))
 
-				debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current dataSource == "+request.toString())
+				//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current dataSource == "+request.toString())
 
 				// val format = new SimpleDateFormat"%Y-%m-%d %H:%M:%S")
 				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
@@ -173,13 +173,13 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 					val diffInMinsEndedStarted = TimeUnit.MINUTES.convert(lastEndedDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
 					if(diffInMinsEndedStarted < 0){ // it must be either still running or failed !
 							if(currentState == string("db.internal.tables.requests.defs.defaultRunningState")){
-								debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] the previous run is not complete yet, it is still running without fail so far . . .")
-								debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] still executing == "+request)
-								debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current state == "+currentState)
+								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] the previous run is not complete yet, it is still running without fail so far . . .")
+								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] still executing == "+request)
+								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current state == "+currentState)
 							}
 							else{
-								debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [ALERT] encountered some exception in last run == "+exceptions+" for dataSource == "+request)
-								debug("[MY DEBUG STATEMENTS] ##re-running , ##re-trying . . .$ db == "+dbname+" @and@ $ table == "+dbtable)
+								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [ALERT] encountered some exception in last run == "+exceptions+" for dataSource == "+request)
+								//debug("[MY DEBUG STATEMENTS] ##re-running , ##re-trying . . .$ db == "+dbname+" @and@ $ table == "+dbtable)
 
 								val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
 
@@ -188,14 +188,14 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 								val freqScalar = schedulingFrequencyParts(0)
 								val freqUnitMeasure = schedulingFrequencyParts(1)
 								val freqInMins = getMins(freqScalar,freqUnitMeasure)
-								debug("[MY DEBUG STATEMENTS] the scheduling frequency == "+runFrequency+" || got converted into mins() : "+freqInMins)
+								//debug("[MY DEBUG STATEMENTS] the scheduling frequency == "+runFrequency+" || got converted into mins() : "+freqInMins)
 
 								if(diffInMinsCurrentStarted > freqInMins){
 									val runStartMessage = "starting the Next Run | previous NOT OK . . ."
 									startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 								}
 								else{
-									debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [previous NOT OK] waiting to run on == "+request)
+									//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [previous NOT OK] waiting to run on == "+request)
 								}
 							}
 					}
@@ -212,7 +212,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 							startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 						}
 						else{
-							debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [previous OK] waiting to run on == "+request)
+							//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [previous OK] waiting to run on == "+request)
 						}
 					}
 				}

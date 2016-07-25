@@ -24,7 +24,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		s+" STRING "
 	}
 
-	def getColAndType(): String = {
+	def  	getColAndType(): String = {
 		val columns = fullTableSchema.split(",")
 		val typecastedColumns = columns.map(appendType(_)).mkString(" , ")
 		typecastedColumns
@@ -73,7 +73,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		val insertPassLogQuery = "INSERT INTO "+string("db.internal.tables.runninglogs.name")+" ("+string("db.internal.tables.runninglogs.cols.host")+","+string("db.internal.tables.runninglogs.cols.port")+","+string("db.internal.tables.runninglogs.cols.dbname")+","+string("db.internal.tables.runninglogs.cols.dbtable")+","+string("db.internal.tables.runninglogs.cols.runTimeStamp")+","+string("db.internal.tables.runninglogs.cols.hash")+","+string("db.internal.tables.runninglogs.cols.exceptions")+","+string("db.internal.tables.runninglogs.cols.notes")+") VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','none','the last run passed')"
+		val insertPassLogQuery = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','none','the last run passed')"
 		statement.executeUpdate(insertPassLogQuery)
 		internalConnection.close()
 	}
@@ -96,7 +96,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		val insertReqFailedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.exceptions")+" = "+strValue+" , "+string("db.internal.tables.requests.cols.failure")+" = "+string("db.internal.tables.requests.cols.failure")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.defaultIdleState")+" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+db+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+table+"\""
+		val insertReqFailedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.exceptions")+" = \""+strValue.replaceAll("[^ a-zA-Z]", "")+"\" , "+string("db.internal.tables.requests.cols.failure")+" = "+string("db.internal.tables.requests.cols.failure")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = "+string("db.internal.tables.requests.defs.defaultIdleState")+" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+db+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+table+"\""
 		statement.executeUpdate(insertReqFailedQuery)
 		internalConnection.close()
 	}
@@ -108,7 +108,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		val insertFailLogQuery = "INSERT INTO "+string("db.internal.tables.runninglogs.name")+" ("+string("db.internal.tables.runninglogs.cols.host")+","+string("db.internal.tables.runninglogs.cols.port")+","+string("db.internal.tables.runninglogs.cols.dbname")+","+string("db.internal.tables.runninglogs.cols.dbtable")+","+string("db.internal.tables.runninglogs.cols.runTimeStamp")+","+string("db.internal.tables.runninglogs.cols.hash")+","+string("db.internal.tables.runninglogs.cols.exceptions")+","+string("db.internal.tables.runninglogs.cols.notes")+") VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','"+strValue+"','the run has failed . . .')"
+		val insertFailLogQuery = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','"+strValue+"','the run has failed . . .')"
 		statement.executeUpdate(insertFailLogQuery)
 		internalConnection.close()
 	}
@@ -118,8 +118,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		debug("INSERT INTO "+string("db.internal.tables.runninglogs.name")+" ("+string("db.internal.tables.runninglogs.cols.host")+","+string("db.internal.tables.runninglogs.cols.port")+","+string("db.internal.tables.runninglogs.cols.dbname")+","+string("db.internal.tables.runninglogs.cols.dbtable")+","+string("db.internal.tables.runninglogs.cols.runTimeStamp")+","+string("db.internal.tables.runninglogs.cols.hash")+","+string("db.internal.tables.runninglogs.cols.exceptions")+","+string("db.internal.tables.runninglogs.cols.notes")+") VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','none','started the run')")
-		val insertStartLogQuery = "INSERT INTO "+string("db.internal.tables.runninglogs.name")+" ("+string("db.internal.tables.runninglogs.cols.host")+","+string("db.internal.tables.runninglogs.cols.port")+","+string("db.internal.tables.runninglogs.cols.dbname")+","+string("db.internal.tables.runninglogs.cols.dbtable")+","+string("db.internal.tables.runninglogs.cols.runTimeStamp")+","+string("db.internal.tables.runninglogs.cols.hash")+","+string("db.internal.tables.runninglogs.cols.exceptions")+","+string("db.internal.tables.runninglogs.cols.notes")+") VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','none','started the run')"
+		val insertStartLogQuery = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','none','started the run')"
 		statement.executeUpdate(insertStartLogQuery)
 		internalConnection.close()
 	}
@@ -127,8 +126,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	def updateBookMark(currBookMark: String) = {
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		debug("INSERT INTO `"+string("db.internal.tables.bookmarks.name")+"`(`"+string("db.internal.tables.bookmarks.cols.dbtablekey")+"`,"+string("db.internal.tables.bookmarks.cols.bookmarkId")+") VALUES( '"+db+"_"+table+"', '"+currBookMark+"')")
-		val insertBkMrkQuery = "INSERT INTO `"+string("db.internal.tables.bookmarks.name")+"`(`"+string("db.internal.tables.bookmarks.cols.dbtablekey")+"`,"+string("db.internal.tables.bookmarks.cols.bookmarkId")+") VALUES( '"+db+"_"+table+"', '"+currBookMark+"')"
+		debug("INSERT INTO `"+string("db.internal.tables.bookmarks.name")+"` (`"+string("db.internal.tables.bookmarks.cols.dbtablekey")+"`,"+string("db.internal.tables.bookmarks.cols.bookmarkId")+") VALUES( '"+db+"_"+table+"', '"+currBookMark+"')")
+		val insertBkMrkQuery = "INSERT INTO `"+string("db.internal.tables.bookmarks.name")+"` (`"+string("db.internal.tables.bookmarks.cols.dbtablekey")+"`,"+string("db.internal.tables.bookmarks.cols.bookmarkId")+") VALUES( '"+db+"_"+table+"', '"+currBookMark+"')"
 		statement.executeUpdate(insertBkMrkQuery)
 		internalConnection.close()
 	}
@@ -136,7 +135,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	def upsert(primarykey: String, bookmark: String) = {
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		val upsertQuery = "INSERT INTO `"+string("db.internal.tables.status.name")+"`("+string("db.internal.tables.status.cols.dbname")+","+string("db.internal.tables.status.cols.table")+",`"+string("db.internal.tables.status.cols.primarykey")+"`,"+string("db.internal.tables.status.cols.sourceId")+","+string("db.internal.tables.status.cols.kafkaTargetId")+string("db.internal.tables.status.cols.hdfsTargetId")+") VALUES( '"+db+"','"+table+"','"+primarykey+"', '"+bookmark+"',"+string("db.internal.tables.status.defs.defaultTargetId")+string("db.internal.tables.status.defs.defaultTargetId")+") ON DUPLICATE KEY UPDATE `"+string("db.internal.tables.status.cols.sourceId")+"` = '"+bookmark+"'"
+		val upsertQuery = "INSERT INTO `"+string("db.internal.tables.status.name")+"` ("+string("db.internal.tables.status.cols.dbname")+","+string("db.internal.tables.status.cols.table")+",`"+string("db.internal.tables.status.cols.primarykey")+"`,"+string("db.internal.tables.status.cols.sourceId")+","+string("db.internal.tables.status.cols.kafkaTargetId")+string("db.internal.tables.status.cols.hdfsTargetId")+") VALUES( '"+db+"','"+table+"','"+primarykey+"', '"+bookmark+"',"+string("db.internal.tables.status.defs.defaultTargetId")+string("db.internal.tables.status.defs.defaultTargetId")+") ON DUPLICATE KEY UPDATE `"+string("db.internal.tables.status.cols.sourceId")+"` = '"+bookmark+"'"
 		val resultSet = statement.executeQuery(upsertQuery)
 		internalConnection.close()
 	}
