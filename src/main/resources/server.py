@@ -3,6 +3,31 @@
 server instead of the normal spray routes
 """
 
+import traceback
+import math
+import csv
+import sys
+import json
+import ast
+import time
+import django
+import sqlalchemy
+from sqlalchemy import *
+from sqlalchemy import func
+import collections
+from django.utils.encoding import smart_str, smart_unicode
+import logging
+import smtplib
+import sendgrid
+from datetime import *
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import pickle
+import logging
+import csv
+from decimal import Decimal
+import requests
+
 from tornado.concurrent import Future
 from tornado import gen
 from tornado.options import define, options, parse_command_line
@@ -28,13 +53,24 @@ internaldbname = "Ramanujan"
 internalusername = "root"
 internalpassword = "1"
 
-defaultDateTimeStr = "1000-01-01 00:00:00"
+defaultDateTimeStr = "0001-01-01 00:00:00"
 defaultRunState = "idle"
 NoExceptionsStr = "none"
 NoNotesStr = "none"
+noInput = "none"
+Zook = "0"
+
+db_port_map = {}
+db_port_map['3306'] = "mysql"
+db_port_map['5432'] = "postgres"
+db_port_map['1433'] = "mssql"
 
 def ss(str_):
-	return '"'+str_+'"'
+	return "'"+str_+"'"
+
+def getUserSpecType(colname,request):
+	# SELECT HIVE SPECIFIC TYPES ONLY e.g string integer etc etc # default STRING no mumbo jumbo
+	return "STRING"
 
 class DefaultHandler(tornado.web.RequestHandler):
 	def get(self):
@@ -68,34 +104,105 @@ class PostRequestHandler(tornado.web.RequestHandler):
 	# the random error is a trouble, and 
 	def post(self):
 		request = tornado.escape.json_decode(self.request.body)
-		print "[MY DEBUG STATEMENTS] received request == "+str(request)
-		db = MySQLdb.connect(internalhost,internalusername,internalpassword,internaldbname)
-		cursor = db.cursor()
+		requestStr = json.dumps(request)
+		print "[MY DEBUG STATEMENTS] received request == "+json.dumps(request)
+		
+		internaldb = MySQLdb.connect(internalhost,internalusername,internalpassword,internaldbname)
+		internalcursor = internaldb.cursor()
+		print "[DEBUG] internal connection is up. . ."
 		processDate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-		requestStr = str(request)
+		print "[DEBUG] processDate == "+str(processDate)
+		requestStr = json.dumps(request)
+		print "[DEBUG] request string == "+str(requestStr)
+		# compulsary fields
 		host = request["host"]
+		print "[DEBUG] host == "+host
+		alias = request["alias"]
+		print "[DEBUG] alias == "+alias
+		user = request["user"]
+		print "[DEBUG] user == "+user
+		password = request["password"]
+		print "[DEBUG] password == "+password
 		port = request["port"]
+		print "[DEBUG] port == "+port
 		dbname = request["db"]
+		print "[DEBUG] db == "+dbname
 		dbtable = request["table"]
+		print "[DEBUG] table == "+dbtable
+		runFrequency = request["runFrequency"]
+		print "[DEBUG] runFrequency == "+runFrequency
+		# redundant fields
+		if "druidDims" not in request.keys():
+			print "[MY DEBUG STATEMENTS] enter druidDims noInput"
+			request["druidDims"] = noInput
+		if "druidMetrics" not in request.keys():
+			print "[MY DEBUG STATEMENTS] enter druidMetrics noInput"
+			request["druidMetrics"] = noInput
+		if "partitionCol" not in request.keys():
+			print "[MY DEBUG STATEMENTS] enter partitionCol noInput"
+			request["partitionCol"] = noInput
+		if "bookmarkformat" not in request.keys():
+			print "[MY DEBUG STATEMENTS] enter bookmarkformat noInput"
+			request["bookmarkformat"] = noInput
+		requestStr = json.dumps(request)
+		print "[DEBUG] request string after optional fillings == "+str(requestStr)
+
+		dbtype = db_port_map[str(port)]
+		print "[DEBUG] dbtype used == "+dbtype
+		print "[DEBUG] the db connection string == "+str(dbtype)+"://"+str(user)+":"+str(password)+"@"+str(host)+":"+str(port)+"/"+str(dbname)
+		dbengine = create_engine(str(dbtype)+"://"+str(user)+":"+str(password)+"@"+str(host)+":"+str(port)+"/"+str(dbname), echo= False)
+		dbconn = dbengine.connect()
+		metadata = MetaData(dbengine)
+
+		desc_table_query = "desc "+dbtable+";"
+		desc_table_result = dbconn.execute(desc_table_query)
+		desc_table_list = desc_table_result.fetchall()
+
+		fullTableSchema = []
+
+		qualified_db_table_name = alias+"_"+dbname+"_"+dbtable
+		for t in desc_table_list:
+			colname = t[0]
+			coltype = t[1]
+
+			fullTableSchema.append(colname)
+
+			usertype = getUserSpecType(colname,request)
+			try:
+				internalcursor.execute("INSERT INTO VarTypeRecordsTable (tablename, colname, coltype, usertype) VALUES ("+','.join([ss(qualified_db_table_name),ss(colname),ss(coltype),ss(usertype)])+");")
+				internaldb.commit()
+			except:
+				print "[DEBUG] some exception while inserting in VarTypeRecordsTable . . ."
+				internaldb.rollback()
+				traceback.print_exc()
+			print "[DEBUG] inserted the colname == "+colname+" with column type == "+coltype+ " and user type == "+usertype
+		print "[DEBUG] column insertions are all over . . ."
+
+		request["fullTableSchema"] = ','.join(fullTableSchema)
+
+		requestStr = json.dumps(request)
+		print "[DEBUG] request string after optional fillings and everything == "+str(requestStr)
+
 		lastStarted = defaultDateTimeStr
 		lastEnded = defaultDateTimeStr
-		runFrequency = request["runFrequency"]
-		totalRuns = "0"
-		successRuns = "0"
-		failureRuns = "0"
+
+		totalRuns = Zook
+		successRuns = Zook
+		failureRuns = Zook
 		currentState = defaultRunState
 		exceptions = NoExceptionsStr
 		notes = NoNotesStr
 		print "[MY DEBUG STATEMENTS] the query == "+str("INSERT into Requests (processDate,request,host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes) VALUES ("+','.join([ss(processDate),ss(requestStr),ss(host),ss(port),ss(dbname),ss(dbtable),ss(lastStarted),ss(lastEnded),ss(runFrequency),ss(totalRuns),ss(successRuns),ss(failureRuns),ss(currentState),ss(exceptions),ss(notes)])+");")
 		try:
-			cursor.execute("INSERT into Requests (processDate,request,host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes) VALUES ("+','.join([ss(processDate),ss(requestStr),ss(host),ss(port),ss(dbname),ss(dbtable),ss(lastStarted),ss(lastEnded),ss(runFrequency),ss(totalRuns),ss(successRuns),ss(failureRuns),ss(currentState),ss(exceptions),ss(notes)])+");")
-			db.commit()
+			internalcursor.execute("INSERT into Requests (processDate,request,host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes) VALUES ("+','.join([ss(processDate),ss(requestStr),ss(host),ss(port),ss(dbname),ss(dbtable),ss(lastStarted),ss(lastEnded),ss(runFrequency),ss(totalRuns),ss(successRuns),ss(failureRuns),ss(currentState),ss(exceptions),ss(notes)])+");")
+			internaldb.commit()
 		except:
-			db.rollback()
-		db.close()
+			print "[DEBUG] some exception while inserting in Requests . . ."
+			internaldb.rollback()
+			traceback.print_exc()
+		internaldb.close()
 		print "[MY DEBUG STATEMENTS] inserted request . . ."
-
-
+		
 
 
 class PostReportHandler(tornado.web.RequestHandler):

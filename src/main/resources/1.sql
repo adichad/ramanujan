@@ -7,6 +7,14 @@ CREATE TABLE IF NOT EXISTS BookMarks(
    PRIMARY KEY ( id )
 );
 
+CREATE TABLE IF NOT EXISTS VarTypeRecordsTable (
+   tablename VARCHAR(100) NOT NULL,
+   colname VARCHAR(100) NOT NULL,
+   coltype VARCHAR(100) NOT NULL,
+   usertype VARCHAR(100) NOT NULL,
+   PRIMARY KEY (tablename,colname)
+);
+
 CREATE TABLE IF NOT EXISTS RunningLOGS (
    id INT NOT NULL AUTO_INCREMENT,
    host VARCHAR(100) NOT NULL,
@@ -33,7 +41,7 @@ CREATE TABLE IF NOT EXISTS Status (
 
 CREATE TABLE IF NOT EXISTS Requests(
    processDate DATETIME,
-   request VARCHAR(2048) NOT NULL,
+   request VARCHAR(4096) NOT NULL,
    host VARCHAR(100) NOT NULL,
    port VARCHAR(100) NOT NULL,
    dbname VARCHAR(100) NOT NULL,

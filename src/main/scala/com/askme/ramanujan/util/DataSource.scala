@@ -15,24 +15,65 @@ import org.json4s.NoTypeHints
 import org.json4s.jackson.Serialization
 
 
-class DataSource(val config: Config,val conntype: String, val host: String, val port: String,
-								 val user: String, val password: String, val db: String, val table: String,
+class DataSource(val config: Config,val conntype: String, val host: String, val alias: String,
+								 val port: String, val user: String, val password: String, val db: String, val table: String,
 								 val bookmark: String, val bookmarkformat: String, val primarykey: String, val fullTableSchema: String,
 								 val hdfsPartitionCol: String,val druidMetrics: String,val druidDims: String, val schedulingFrequency: String) extends Configurable with Logging with Serializable{
 
-	def appendType(s: String): String = {
-		s+" STRING "
+
+	def sqlToHiveDataTypeMapping(coltype: String): String = {
+		//HIVE -> INT, BIGINT , FLOAT , DOUBLE , DECIMAL , TIMESTAMP , DATE , STRING , VARCHAR , CHAR , BOOLEAN
+		//SQL -> int,varchar,binary,timestamp,date,time,datetime,float,int
+		val typeConversionsSQLtoHIVEMap = Map("int" -> "INT", "binary" -> "BOOLEAN", "varchar" -> "STRING", "date" -> "DATE", "time" -> "TIMESTAMP", "float" -> "FLOAT")
+		var hiveType = "STRING"
+		typeConversionsSQLtoHIVEMap.keys.foreach {
+			k => if(coltype.toLowerCase().contains(k)) { hiveType = typeConversionsSQLtoHIVEMap(k) }
+		}
+		debug("[MY DEBUG STATEMENTS] [SQL TO HIVE DATA TYPE MAPPINGS] generating coltype == "+coltype+" #as#  "+hiveType)
+		hiveType
+	}
+
+	def appendType(colname : String, coltype: String, userTypeColsMap: Map[String, String]):String = {
+		if(userTypeColsMap.contains(colname)){
+			debug("[MY DEBUG STATEMENTS] [HIVE TABLE SCHEMA GENERATION] returning == "+colname+" "+userTypeColsMap(colname))
+			colname+" "+userTypeColsMap(colname)
+		}
+		else{
+			debug("[MY DEBUG STATEMENTS] [HIVE TABLE SCHEMA GENERATION] returning == "+colname+" "+sqlToHiveDataTypeMapping(coltype))
+			colname+" "+sqlToHiveDataTypeMapping(coltype)
+		}
 	}
 
 	def  	getColAndType(): String = {
 		val columns = fullTableSchema.split(",")
-		val typecastedColumns = columns.map(appendType(_)).mkString(" , ")
-		typecastedColumns
+
+		var userTypeColsMap : Map[String,String] = Map()
+		var hiveTableschema = scala.collection.mutable.MutableList[String]()
+
+		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
+		val statement = internalConnection.createStatement()
+		val qualifiedTableName = alias+"_"+db+"_"+table
+		val getUserColTypesQuery = "SELECT "+string("db.internal.tables.varTypeRecordsTable.cols.tablename")+", "+string("db.internal.tables.varTypeRecordsTable.cols.colname")+", "+string("db.internal.tables.varTypeRecordsTable.cols.coltype")+", "+string("db.internal.tables.varTypeRecordsTable.cols.usertype")+" from "+string("db.internal.tables.varTypeRecordsTable.name")+" where "+string("db.internal.tables.varTypeRecordsTable.cols.tablename")+" = \""+qualifiedTableName+"\";"
+		val resultSet = statement.executeQuery(getUserColTypesQuery)
+		while ( resultSet.next() ) {
+			val colname = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.colname"))
+			val coltype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.coltype"))
+			val usertype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.usertype"))
+			if(!(usertype.toLowerCase() == string("sinks.hdfs.nullUserType"))){
+				userTypeColsMap += ( colname -> usertype )
+			}
+			hiveTableschema += appendType(colname,coltype,userTypeColsMap)
+		}
+		internalConnection.close()
+		//val typecastedColumns = columns.map(appendType(_,coltype,userTypeColsMap)).mkString(" , ")
+		debug("[MY DEBUG STATEMENTS] [GET COL AND TYPE] hive table schema BE LIKE == " + hiveTableschema.mkString(" , "))
+		hiveTableschema.mkString(" , ")
 	}
 
 	val oConfig = config // maybe this relays config to them all
 	var oconntype: String = conntype // e.g com.mysql.driver.MySQL
 	var ohost: String = host // host ip
+	var oalias: String = alias
 	var oport: String = port // port no.
 	var ouser: String = user // user
 	var opassword: String = password // password
@@ -90,25 +131,26 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	}
 	// Update insertInRunLogsFailed
 	def updateInRequestsFailed(hash: String, value: Exception) = {
-		val strValue = value.toString().substring(0,100)
+		val strValue = value.toString().substring(0,int("db.internal.tables.requests.defs.excStrEnd"))
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		val insertReqFailedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.exceptions")+" = \""+strValue.replaceAll("[^ a-zA-Z]", "")+"\" , "+string("db.internal.tables.requests.cols.failure")+" = "+string("db.internal.tables.requests.cols.failure")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultIdleState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+db+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+table+"\""
+		val insertReqFailedQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.exceptions")+" = \""+strValue.replaceAll("[^a-zA-Z]", "")+"\" , "+string("db.internal.tables.requests.cols.failure")+" = "+string("db.internal.tables.requests.cols.failure")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultIdleState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+db+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+table+"\""
 		statement.executeUpdate(insertReqFailedQuery)
 		internalConnection.close()
 	}
 
 	def insertInRunLogsFailed(hash: String, value: Exception) = {
-		val strValue = value.toString().substring(0,100)
+		val strValue = value.toString().substring(0,int("db.internal.tables.requests.defs.excStrEnd"))
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
 		val insertFailLogQuery = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','"+strValue+"','the run has failed . . .')"
+		debug("[MY DEBUG STATEMENTS] INSERT LOG FAIL QUERY == "+insertFailLogQuery)
 		statement.executeUpdate(insertFailLogQuery)
 		internalConnection.close()
 	}
@@ -155,8 +197,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val id: String = resultSet.getString(string("db.internal.tables.bookmarks.cols.id"))
 			val prevBookMarkFetchQuery = "select "+string("db.internal.tables.bookmarks.cols.bookmarkId")+" from "+string("db.internal.tables.bookmarks.name")+" where "+string("db.internal.tables.bookmarks.cols.dbtablekey")+" in (\""+ key +"\") and "+string("db.internal.tables.bookmarks.cols.id")+" in ("+ id +")"
 			debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] prev bookmark fetch query . . . == "+prevOffsetFetchQuery)
-			val statement1 = internalConnection.createStatement()
-			resultSet = statement1.executeQuery(prevBookMarkFetchQuery)
+			val prevBookMarkstatement = internalConnection.createStatement()
+			resultSet = prevBookMarkstatement.executeQuery(prevBookMarkFetchQuery)
 			if(resultSet.next()){
 				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous bookmark] this db_table  has a row . . . == "+toString())
 				val bookmark = resultSet.getString(string("db.internal.tables.bookmarks.cols.bookmarkId"))
@@ -164,13 +206,18 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				bookmark
 			}
 			else {
-				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
-				string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
+				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
+				if(bookmarkformat.toLowerCase() == string("db.internal.tables.bookmarks.defs.defaultDateFormat").toLowerCase){
+					string("db.internal.tables.bookmarks.defs.defaultDateBookMarkValue")
+				}
+				else {
+					string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
+				}
 			}
 		}
 		else {
-			debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NOTNULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
-			string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
+			debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NOTNULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
+			string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
 		}
 	}
 	// get the current bookmark, from source table
@@ -197,8 +244,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] got the current bookmark . . .")
 			if(jdbcDF.rdd.isEmpty()){
 				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] the db of affected keys was all empty . . .")
-				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
-				string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
+				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
+				string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
 			}
 			else{
 				val currBookMark = jdbcDF.first().get(jdbcDF.first().fieldIndex(bookmark)).toString()
@@ -220,8 +267,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] got the current bookmark . . .")
 			if(jdbcDF.rdd.isEmpty()){
 				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] the db of affected keys was all empty . . .")
-				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
-				string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
+				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
+				string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
 			}
 			else{
 				val currBookMark = jdbcDF.first().getString(jdbcDF.first().fieldIndex(bookmark))
@@ -243,8 +290,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] got the current bookmark . . .")
 			if(jdbcDF.rdd.isEmpty()){
 				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] the db of affected keys was all empty . . .")
-				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultBookMarkValue"))
-				string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
+				debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] returning the default value == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
+				string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
 			}
 			else{
 				val currBookMark = jdbcDF.first().getString(jdbcDF.first().fieldIndex(bookmark))
@@ -255,7 +302,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		else{
 			// no supported DB type
 			debug("[MY DEBUG STATEMENTS] [SQL] [BOOKMARKS] [current bookmark] entered some unsupported DB Driver / type . . .")
-			string("db.internal.tables.bookmarks.defs.defaultBookMarkValue")
+			string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
 		}
 	}
 	def getAffectedPKs(prevBookMark: String,currBookMark: String) = {
@@ -264,52 +311,41 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val sc = SparkContext.getOrCreate(conf)
 		val sqlContext = new SQLContext(sc)
 
+		val getAffectedPKsSparkQuery = "(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" and "+bookmark+" IS NOT NULL order by "+bookmark+" desc limit 500) overtmp"
+
+
 		debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] getting it . . . ")
 		if(conntype.toLowerCase().contains(string("db.type.mysql").toLowerCase())){
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] entered mysql types db/table . . .")
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] getting affected PKs / DF / . . .")
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] [QUERY] === (select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype,
 					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
-					"dbtable" -> ("(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" order by "+bookmark+" desc limit 100) overtmp")
-					//"dbtable" -> ("(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\") overtmp")
-					//"dbtable" -> ("(select \""+db+"\" as "+string("db.internal.tables.status.cols.dbname")+", \""+table+"\" as "+string("db.internal.tables.status.cols.dbtable")+", "+primarykey+" as "+string("db.internal.tables.status.cols.primarykey")+", max("+bookmark+") as "+string("db.internal.tables.status.cols.sourceId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.kafkaTargetId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.hdfsTargetId")+", concat(\'"+db+"_"+table+"_\',"+primarykey+") as "+string("db.internal.tables.status.cols.qualifiedName")+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp") // table specific
+					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
 			jdbcDF
 		}
 		else if(conntype.toLowerCase().contains(string("db.type.postgres").toLowerCase())){
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] entered postgres types db/table . . .")
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] getting affected PKs / DF / . . .")
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] [QUERY] === (select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype, // "org.postgresql.Driver"
 					"url" -> (string("db.conn.jdbc")+":"+string("db.type.postgres")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
-					"dbtable" -> ("(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
-					//"dbtable" -> ("(select \""+db+"\" as "+string("db.internal.tables.status.cols.dbname")+", \""+table+"\" as "+string("db.internal.tables.status.cols.dbtable")+", "+primarykey+" as "+string("db.internal.tables.status.cols.primarykey")+", max("+bookmark+") as "+string("db.internal.tables.status.cols.sourceId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.kafkaTargetId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.hdfsTargetId")+", concat(\'"+db+"_"+table+"_\',"+primarykey+") as "+string("db.internal.tables.status.cols.qualifiedName")+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp") // table specific
+					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
 			jdbcDF
 		}
 		else if(conntype.toLowerCase().contains(string("db.type.sqlserver").toLowerCase())){
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] entered sqlserver types db/table . . .")
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] getting affected PKs / DF / . . .")
-			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] [QUERY] === (select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
 					"url" -> (string("db.conn.jdbc")+":"+string("db.type.sqlserver")+"://"+host+":"+port+";database="+db+";user="+user+";password="+password),
-					"dbtable" -> ("(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp")
-					//"dbtable" -> ("(select \""+db+"\" as "+string("db.internal.tables.status.cols.dbname")+", \""+table+"\" as "+string("db.internal.tables.status.cols.dbtable")+", "+primarykey+" as "+string("db.internal.tables.status.cols.primarykey")+", max("+bookmark+") as "+string("db.internal.tables.status.cols.sourceId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.kafkaTargetId")+",\""+string("db.internal.tables.status.defs.defaultTargetId")+"\" as "+string("db.internal.tables.status.cols.hdfsTargetId")+", concat(\'"+db+"_"+table+"_\',"+primarykey+") as "+string("db.internal.tables.status.cols.qualifiedName")+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" group by "+primarykey+") overtmp") // table specific
+					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
 			jdbcDF
 		}
 		else{
-			// no supported DB type
 			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] entered some unsupported db / table . . .")
 			debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] returning an empty / DF / . . .")
 			sqlContext.emptyDataFrame // just return one empty data frame, no rows, no columns

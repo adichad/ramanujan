@@ -43,12 +43,16 @@
       </nav>
       <div class="well" id="New">
          <h2> Kindly provide us with details for new Table Logging</h2>
-         <form name="new report form" data-ng-controller="ramanujanCtrl" role="form">
+         <form name="new request form" data-ng-controller="ramanujanCtrl" role="form">
             <fieldset>
                <legend> New Table Details: </legend>
                <div class="form-group">
                   <label for="host">Host:</label>
                   <input type="host" class="form-control" id="host" placeholder="Enter host" data-ng-model="table.host" required>
+               </div>
+               <div class="form-group">
+                  <label for="alias">Alias:</label>
+                  <input type="alias" class="form-control" id="alias" placeholder="Enter Alias for the host above" data-ng-model="table.alias" required>
                </div>
                <div class="form-group">
                   <label for="port">Port:</label>
@@ -75,8 +79,8 @@
                   <input type="bookmark" class="form-control" id="bookmark" placeholder="Enter bookmark" data-ng-model="table.bookmark" required>
                </div>
                <div class="form-group">
-                  <label for="bookmarkformat">Bookmark Format (ts):</label>
-                  <input type="bookmarkformat" class="form-control" id="bookmarkformat" placeholder="Enter Bookmark Format (ts):" data-ng-model="table.bookmarkformat" required>
+                  <label for="bookmarkformat">Bookmark Format:</label>
+                  <input type="bookmarkformat" class="form-control" id="bookmarkformat" placeholder="Enter Bookmark Format ( ts or logId etc. ):" data-ng-model="table.bookmarkformat">
                </div>
                <div class="form-group">
                   <label for="primarykey">Primary Key:</label>
@@ -87,25 +91,91 @@
                   <input type="conntype" class="form-control" id="conntype" placeholder="Enter Connection Type:" data-ng-model="table.conntype" required>
                </div>
                <div class="form-group">
-                  <label for="fullTableSchema">Full Table Schema(Cols):</label>
-                  <input type="fullTableSchema" class="form-control" id="fullTableSchema" placeholder="Enter Full Table Schema(Cols):" data-ng-model="table.fullTableSchema" required>
-               </div>
-               <div class="form-group">
                   <label for="partitionCol">HDFS Partition Columns:</label>
                   <input type="partitionCol" class="form-control" id="partitionCol" placeholder="Enter Full Col to use as partition:" data-ng-model="table.partitionCol">
                </div>
+
                <div class="form-group">
                   <label for="druidMetrics">Druid Metrics</label>
-                  <input type="druidMetrics" class="form-control" id="druidMetrics" placeholder="Enter the druid metrics(cols):" data-ng-model="table.druidMetrics" required>
+                  <input type="druidMetrics" class="form-control" id="druidMetrics" placeholder="Enter the druid metrics(cols):" data-ng-model="table.druidMetrics">
                </div>
                <div class="form-group">
                   <label for="druidDims">Druid Dimensions</label>
-                  <input type="druidDims" class="form-control" id="druidDims" placeholder="Enter the druid dimensions(cols):" data-ng-model="table.druidDims" required>
+                  <input type="druidDims" class="form-control" id="druidDims" placeholder="Enter the druid dimensions(cols):" data-ng-model="table.druidDims">
                </div>
                <div class="form-group">
                   <label for="runFrequency">Scheduling Frequency</label>
                   <input type="runFrequency" class="form-control" id="runFrequency" placeholder="Enter the scheduling frequency:" data-ng-model="table.runFrequency" required>
                </div>
+               <!--
+               <div class="container">
+                <div class="row clearfix">
+                  <div class="col-md-12 column">
+                    <table class="table table-bordered table-hover" id="tab_logic">
+                      <thead>
+                        <tr >
+                          <th class="text-center">
+                              #
+                          </th>
+                          <th class="text-center">
+                              Column Name
+                          </th>
+                          <th class="text-center">
+                              Column Type
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr id='addr0'>
+                          <td>
+                              1
+                          </td>
+                          <td>
+                            <input type="text" name='colname'  placeholder='Column Name' class="form-control"/>
+                          </td>
+                          <td>
+                            <input type="text" name='coltype' placeholder='Column Type' class="form-control"/>
+                          </td>
+                        </tr>
+                        <tr id='addr1'></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <a id="add_row" class="btn btn-default pull-left">Add Row</a><a id='delete_row' class="pull-right btn btn-default">Delete Row</a>
+              </div>
+              -->
+               <!--
+               <div class="form-group">
+                  <label for="specificTypes">Add specific data types for columns( If Any): </label>
+                  <br>
+                  <input type="button" class="btn btn-success" value="Add A Row" onclick="addRow('specificTypestable')" />
+                  <input type="button" class="btn btn-danger" value="Delete Row(s)" onclick="deleteRow('specificTypestable')" />
+                  <br>
+                  <br>
+                  <table id="specificTypestable" class="table table-bordered" data-ng-model="table.specificType" border="1">
+                    <colgroup>
+                      <col span="1" style="width: 10%;">
+                      <col span="1" style="width: 45%;">
+                      <col span="1" style="width: 45%;">
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th><u>select</u></th>
+                        <th><u>Column Name</u></th>
+                        <th><u>User Specified Type</u></th>
+                      </tr>
+                    </thead>
+                     <tbody>
+                      <tr>
+                        <td><input class="form-control" type="checkbox" name="chk"/></td>
+                        <td><input class="form-control" placeholder="enter the column name: " type="text" /></td>
+                        <td><input class="form-control" placeholder="enter its type: " type="text" /></td>
+                      </tr>
+                  </tbody>                     
+                  </table>
+               </div>
+               -->
                <div class="checkbox">
                   <label><input type="checkbox"> Sure ?!?</label>
                </div>
@@ -335,6 +405,23 @@
             </a>
          </div>
       </div>
+      <!--
+      <script language="javascript">
+        var i=1;
+     $("#add_row").click(function(){
+      $('#addr'+i).html("<td>"+ (i+1) +"<td><input  name='pass"+i+"' type='text' placeholder='Password'  class='form-control input-md'></td><td><input  name='ip"+i+"' type='text' placeholder='IP'  class='form-control input-md'></td><td><input  name='country"+i+"' type='text' placeholder='Country'  class='form-control input-md'></td><td><input  name='ipDisp"+i+"' type='text' placeholder='IP details'  class='form-control input-md'></td>");
+
+      $('#tab_logic').append('<tr id="addr'+(i+1)+'"></tr>');
+      i++; 
+  });
+     $("#delete_row").click(function(){
+         if(i>1){
+         $("#addr"+(i-1)).html('');
+         i--;
+         }
+     });
+      </script>
+      -->
       <script src="/web/static/js/jquery.js"></script>
       <script src="/web/static/js/bootstrap.js"></script>
       <script src="/web/static/js/angular.js"></script>
@@ -342,6 +429,7 @@
       <script src="/web/static/js/controllers.js"></script>
       <script src="/web/static/js/services.js"></script>
       <script src="/web/static/js/app.js"></script>
+      <script scr="/web/static/js/userInputSpecTypes.js"></script>
       <!--<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.5/angular.min.js"></script>-->
       <!--<script src="js/services.js"></script>-->
       <!--<script src="js/app.js"></script>-->

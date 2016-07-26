@@ -58,20 +58,22 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		var connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 
 	def transform(request: String) = {
-		var request_ = request.replace("u'","\"")
-		request_ = request_.replaceAll("'","\"")
-		case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String)
+		//var request_ = request.replace("u'","\"") // not needed anymore
+		var request_ = request.replaceAll("'","\"") // not needed anymore
+		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String)
 
 		object RequestJsonProtocol extends DefaultJsonProtocol {
-			implicit val RequestFormat = jsonFormat15(RequestObject)
+			implicit val RequestFormat = jsonFormat16(RequestObject)
 		}
 		import RequestJsonProtocol._
-		val jsonValue = request_.parseJson
+		val jsonValue = request_.parseJson //parequest_.parseJson
+
 		debug("[MY DEBUG STATEMENTS] [SQL] [transform json value] == "+jsonValue)
 
 		val requestObject = jsonValue.convertTo[RequestObject]
 
 		val host = requestObject.host // e.g 10.0.16.98
+		val alias = requestObject.alias
 		val port = requestObject.port // e.g 3306
 		val user = requestObject.user // e.g jyotishree
 		val password = requestObject.password // e.g getit1234
@@ -86,23 +88,22 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		val druidMetrics = requestObject.druidMetrics
 		val druidDims = requestObject.druidDims
 		val runFrequency = requestObject.runFrequency
-		// create a datasource to connect for the above request / json / x
-		//debug("[MY DEBUG STATEMENTS] [SQL] instantiating the dataSource . . .")
-		val dataSource = new DataSource(config,conntype,host,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,hdfsPartitionCol,druidMetrics,druidDims,runFrequency)
+
+		val dataSource = new DataSource(config,conntype,host,alias,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,hdfsPartitionCol,druidMetrics,druidDims,runFrequency)
 		dataSource
 	}
 
 	  def getMins(freqScalar: String, freqUnitMeasure: String): Int = {
-		  if(freqUnitMeasure.toLowerCase().contains("db.internal.tables.requests.defs.min")){
+		  if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.min"))){
 				freqScalar.toInt
 		  }
-			else if(freqUnitMeasure.toLowerCase().contains("db.internal.tables.requests.defs.hour")){
+			else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.hour"))){
 				freqScalar.toInt * 60 // ok if hardcoded
 		  }
-		  else if(freqUnitMeasure.toLowerCase().contains("db.internal.tables.requests.defs.day")){
+		  else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.day"))){
 				freqScalar.toInt * 1440 // ok if hardcoded
 		  }
-		  else  if(freqUnitMeasure.toLowerCase().contains("db.internal.tables.requests.defs.week")){
+		  else  if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.week"))){
 				freqScalar.toInt * 10080 // ok if hardcoded
 		  }
 		  else {
@@ -186,8 +187,6 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 								val freqScalar = schedulingFrequencyParts(0)
 								val freqUnitMeasure = schedulingFrequencyParts(1)
-								debug("[MY DEBUG TEMP] "+freqScalar)
-								debug("[MY DEBUG TEMP] "+freqUnitMeasure)
 								val freqInMins = getMins(freqScalar,freqUnitMeasure)
 								//debug("[MY DEBUG STATEMENTS] the scheduling frequency == "+runFrequency+" || got converted into mins() : "+freqInMins)
 
@@ -204,8 +203,8 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 						val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
 						val schedulingFrequencyParts = runFrequency.trim().split(" ")
 
-						val freqScalar = schedulingFrequencyParts(0)
-						val freqUnitMeasure = schedulingFrequencyParts(1)
+						val freqScalar = schedulingFrequencyParts(0).trim()
+						val freqUnitMeasure = schedulingFrequencyParts(1).trim()
 						val freqInMins = getMins(freqScalar,freqUnitMeasure)
 
 						if(diffInMinsCurrentStarted > freqInMins){
