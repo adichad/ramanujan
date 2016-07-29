@@ -53,17 +53,16 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 	  val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
 		val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
 		
-		val internalURL: String = string("db.conn.jdbc")+":"+string("db.conn.use")+"://"+internalHost+":"+internalPort+"/"+internalDB // the internal connection DB <status, bookmark, requests> etc
+		val internalURL: String = string("db.conn.jdbc")+":"+string("db.conn.use")+"://"+internalHost+":"+internalPort+"/"+internalDB+"?zeroDateTimeBehavior=convertToNull" // the internal connection DB <status, bookmark, requests> etc
 		
 		var connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 
 	def transform(request: String) = {
-		//var request_ = request.replace("u'","\"") // not needed anymore
 		var request_ = request.replaceAll("'","\"") // not needed anymore
-		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String)
+		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String,treatment: String)
 
 		object RequestJsonProtocol extends DefaultJsonProtocol {
-			implicit val RequestFormat = jsonFormat16(RequestObject)
+			implicit val RequestFormat = jsonFormat17(RequestObject)
 		}
 		import RequestJsonProtocol._
 		val jsonValue = request_.parseJson //parequest_.parseJson
@@ -88,8 +87,9 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		val druidMetrics = requestObject.druidMetrics
 		val druidDims = requestObject.druidDims
 		val runFrequency = requestObject.runFrequency
+		val treatment = requestObject.treatment
 
-		val dataSource = new DataSource(config,conntype,host,alias,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,hdfsPartitionCol,druidMetrics,druidDims,runFrequency)
+		val dataSource = new DataSource(config,conntype,host,alias,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,hdfsPartitionCol,druidMetrics,druidDims,runFrequency,treatment)
 		dataSource
 	}
 
@@ -116,9 +116,9 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 	def startASpin(host: String,port: String,dbname: String,dbtable: String,currentDateStr: String,runStartMessage: String,request: String) = {
 		val hash = randomString(10)
 		val insertRecRunningLOGS = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+host+"','"+port+"','"+dbname+"','"+dbtable+"','"+currentDateStr+"','"+hash+"','none','"+runStartMessage+"')"
-		val insertRecRunningstatement = connection.createStatement()
-		insertRecRunningstatement.executeUpdate(insertRecRunningLOGS)
-
+		val insertRecRunningStatement = connection.createStatement()
+		insertRecRunningStatement.executeUpdate(insertRecRunningLOGS)
+		Thread sleep 1000
 		val updateRequestsRunningQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbname+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+dbtable+"\""
 		val updateRequestsRunningstatement = connection.createStatement()
 		updateRequestsRunningstatement.executeUpdate(updateRequestsRunningQuery)
@@ -173,9 +173,6 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 					val diffInMinsEndedStarted = TimeUnit.MINUTES.convert(lastEndedDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
 					if(diffInMinsEndedStarted < 0){ // it must be either still running or failed !
 							if(currentState == string("db.internal.tables.requests.defs.defaultRunningState")){
-								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] the previous run is not complete yet, it is still running without fail so far . . .")
-								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] still executing == "+request)
-								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current state == "+currentState)
 							}
 							else{
 								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [ALERT] encountered some exception in last run == "+exceptions+" for dataSource == "+request)
@@ -188,14 +185,12 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 								val freqScalar = schedulingFrequencyParts(0)
 								val freqUnitMeasure = schedulingFrequencyParts(1)
 								val freqInMins = getMins(freqScalar,freqUnitMeasure)
-								//debug("[MY DEBUG STATEMENTS] the scheduling frequency == "+runFrequency+" || got converted into mins() : "+freqInMins)
 
 								if(diffInMinsCurrentStarted > freqInMins){
 									val runStartMessage = "starting the Next Run | previous NOT OK . . ."
 									startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 								}
 								else{
-									//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [previous NOT OK] waiting to run on == "+request)
 								}
 							}
 					}
@@ -212,13 +207,11 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 							startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 						}
 						else{
-							//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [previous OK] waiting to run on == "+request)
 						}
 					}
 				}
 			}
 		}
-    //debug("[MY DEBUG STATEMENTS] closing down the internal connection . . .")
 		connection.close()
 
 	class CustomSparkListener extends SparkListener {

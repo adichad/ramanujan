@@ -9,16 +9,16 @@ import com.typesafe.config.Config
 import grizzled.slf4j.Logging
 import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{Row, SQLContext, SaveMode}
+import org.apache.spark.sql._
 import org.apache.spark.{SparkConf, SparkContext}
 import org.json4s.NoTypeHints
 import org.json4s.jackson.Serialization
-
+import org.apache.spark.sql.functions._
 
 class DataSource(val config: Config,val conntype: String, val host: String, val alias: String,
 								 val port: String, val user: String, val password: String, val db: String, val table: String,
 								 val bookmark: String, val bookmarkformat: String, val primarykey: String, val fullTableSchema: String,
-								 val hdfsPartitionCol: String,val druidMetrics: String,val druidDims: String, val schedulingFrequency: String) extends Configurable with Logging with Serializable{
+								 val hdfsPartitionCol: String,val druidMetrics: String,val druidDims: String, val schedulingFrequency: String,val treatment: String) extends Configurable with Logging with Serializable{
 
 
 	def sqlToHiveDataTypeMapping(coltype: String): String = {
@@ -42,6 +42,220 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			debug("[MY DEBUG STATEMENTS] [HIVE TABLE SCHEMA GENERATION] returning == "+colname+" "+sqlToHiveDataTypeMapping(coltype))
 			colname+" "+sqlToHiveDataTypeMapping(coltype)
 		}
+	}
+
+	// skip  / report / fail
+	val longToDouble = udf((col: String, treatment: String) => {
+		if(treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report"){
+			try{
+				col.toDouble
+			} catch {
+				case e : Throwable => {
+					if(treatment.toLowerCase() == "skip"){
+						0.00
+					}
+					else if(treatment.toLowerCase() == "report"){
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == "+e.printStackTrace())
+					}
+					else {
+						col.toDouble
+					}
+				}
+			}
+		}
+		else{
+
+		}
+		try{
+			col.toDouble
+		} catch {
+			case e : Throwable => {
+				if(treatment.toLowerCase() == "skip"){
+					0.00
+				}
+				else if(treatment.toLowerCase() == "report"){
+					debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == "+e.printStackTrace())
+				}
+				else {
+
+				}
+			}
+		}
+	} )
+
+	val longToInt = udf((col: String, treatment: String) => {
+		try{
+			col.toInt
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val longToString = udf((col: String, treatment: String) => {
+		try{
+			col.toString
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val stringToInt    = udf((col: String, treatment: String) => {
+		try{
+			col.toInt
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val stringToLong = udf((col: String, treatment: String) => {
+		try{
+			col.toLong
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val stringToDouble = udf((col: String, treatment: String) => {
+		try{
+			col.toDouble
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val intToLong = udf((col: String, treatment: String) => {
+		try{
+			col.toLong
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val intToString = udf((col: String, treatment: String) => {
+		try{
+			col.toString
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val intToDouble = udf((col: String, treatment: String) => {
+		try{
+			col.toDouble
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val doubleToInt = udf((col: String, treatment: String) => {
+		try{
+			col.toInt
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val doubleToLong = udf((col: String, treatment: String) => {
+		try{
+			col.toLong
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	val doubleToString = udf((col: String, treatment: String) => {
+		try{
+			col.toString
+		} catch {
+			case _ : Throwable => {
+
+			}
+		}
+	} )
+
+	def convertTargetTypes(PKsAffectedDFSource: DataFrame): DataFrame = {
+		var df = PKsAffectedDFSource
+		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
+		val statement = internalConnection.createStatement()
+		val qualifiedTableName = alias+"_"+db+"_"+table
+		val getUserColTypesQuery = "SELECT "+string("db.internal.tables.varTypeRecordsTable.cols.tablename")+", "+string("db.internal.tables.varTypeRecordsTable.cols.colname")+", "+string("db.internal.tables.varTypeRecordsTable.cols.coltype")+", "+string("db.internal.tables.varTypeRecordsTable.cols.usertype")+" from "+string("db.internal.tables.varTypeRecordsTable.name")+" where "+string("db.internal.tables.varTypeRecordsTable.cols.tablename")+" = \""+qualifiedTableName+"\";"
+		val resultSet = statement.executeQuery(getUserColTypesQuery)
+		while ( resultSet.next() ) {
+			val colname = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.colname"))
+			val coltype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.coltype"))
+			val usertype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.usertype"))
+			if(!(usertype.toLowerCase() == string("sinks.hdfs.nullUserType"))){ // long if-else. must avoid it.
+				if(usertype.toLowerCase() == "bigint")
+				{
+					if(coltype.toLowerCase() == "int"){
+						df = df.withColumn(colname, intToLong(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "double"){
+						df = df.withColumn(colname, doubleToLong(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "string"){
+						df = df.withColumn(colname, stringToLong(df(colname),lit(treatment)))
+					}
+				}
+				else if(usertype.toLowerCase() == "int")
+				{
+					if(coltype.toLowerCase() == "bigint"){
+						df = df.withColumn(colname, longToInt(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "double"){
+						df = df.withColumn(colname, doubleToInt(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "string"){
+						df = df.withColumn(colname, stringToInt(df(colname),lit(treatment)))
+					}
+				}
+				else if(usertype.toLowerCase() == "double")
+				{
+					if(coltype.toLowerCase() == "int"){
+						df = df.withColumn(colname, intToDouble(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "bigint"){
+						df = df.withColumn(colname,longToDouble(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "string"){
+						df = df.withColumn(colname,stringToDouble(df(colname),lit(treatment)))
+					}
+				}
+				else if(usertype.toLowerCase() == "string")
+				{
+					if(coltype.toLowerCase() == "int"){
+						df = df.withColumn(colname,intToString(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "bigint"){
+						df = df.withColumn(colname,longToString(df(colname),lit(treatment)))
+					}
+					else if(coltype.toLowerCase() == "double"){
+						df = df.withColumn(colname,doubleToString(df(colname),lit(treatment)))
+					}
+				}
+			}
+		}
+		df
 	}
 
 	def  	getColAndType(): String = {
@@ -91,8 +305,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
 	val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
 
-	val hostURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db) // pertains to this very db+table : fully qualified name
-	val internalURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+internalHost+":"+internalPort+"/"+internalDB) // the internal connection DB <status, bookmark, requests> etc
+	val hostURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?zeroDateTimeBehavior=convertToNull") // pertains to this very db+table : fully qualified name
+	val internalURL: String = (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+internalHost+":"+internalPort+"/"+internalDB)//+"?zeroDateTimeBehavior=convertToNull") // the internal connection DB <status, bookmark, requests> etc
 	// returns the //info things
 	override def toString(): String = (" this data source is == "+hostURL) // to Strings : db specific
 	def insertInitRow(json: String) = {
@@ -131,7 +345,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	}
 	// Update insertInRunLogsFailed
 	def updateInRequestsFailed(hash: String, value: Exception) = {
-		val strValue = value.toString().substring(0,int("db.internal.tables.requests.defs.excStrEnd"))
+		val strValue = value.toString().substring(0,math.min(value.toString().length(),int("db.internal.tables.requests.defs.excStrEnd")))
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
 		val currentDateStr = format.format(currentDateDate)
@@ -143,7 +357,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	}
 
 	def insertInRunLogsFailed(hash: String, value: Exception) = {
-		val strValue = value.toString().substring(0,int("db.internal.tables.requests.defs.excStrEnd"))
+		val strValue = value.toString().substring(0,math.min(value.toString().length(),int("db.internal.tables.requests.defs.excStrEnd")))
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
 		val currentDateStr = format.format(currentDateDate)
@@ -311,7 +525,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val sc = SparkContext.getOrCreate(conf)
 		val sqlContext = new SQLContext(sc)
 
-		val getAffectedPKsSparkQuery = "(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" and "+bookmark+" IS NOT NULL order by "+bookmark+" desc limit 500) overtmp"
+		val getAffectedPKsSparkQuery = "(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" and "+bookmark+" IS NOT NULL and "+bookmark+" > '2016-07-22' order by "+bookmark+" desc limit 2000) overtmp_"+alias+"_"+db+"_"+table
 
 
 		debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] getting it . . . ")
@@ -319,7 +533,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype,
-					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
+					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password+"?zeroDateTimeBehavior=convertToNull"),
 					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
@@ -329,7 +543,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype, // "org.postgresql.Driver"
-					"url" -> (string("db.conn.jdbc")+":"+string("db.type.postgres")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password),
+					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password+"?zeroDateTimeBehavior=convertToNull"),
 					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
@@ -339,7 +553,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
-					"url" -> (string("db.conn.jdbc")+":"+string("db.type.sqlserver")+"://"+host+":"+port+";database="+db+";user="+user+";password="+password),
+					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password+"?zeroDateTimeBehavior=convertToNull"),
 					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
@@ -599,7 +813,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 
 	def formPartitionPath(prefix: String, db: String, table: String,bookmark: String) = {
 		debug("[MY DEBUG STATEMENTS] [STREAMING] [HDFS] form some goddamn partition path . . .")
-		prefix+db+"_"+table+"/dt="+bookmark.substring(0, int("sinks.hdfs.partitionEnd")) // not using the bookmark because of no partition,or infact
+		prefix+db+"_"+table+"/dt="+bookmark.substring(0, math.min(bookmark.length(),int("sinks.hdfs.partitionEnd"))) // not using the bookmark because of no partition,or infact
 	}
 
 	def piggyMerge(sc: SparkContext,sqlContext: SQLContext, db_to_query: String, table_to_query: String) = { // upsert HDFS work-around

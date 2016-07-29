@@ -1,11 +1,20 @@
 'use strict';
 
 var ramanujanCtrl = function($scope,$http) {
+   $scope.cols = [{}];
 
+  $scope.add_row = function() {
+    $scope.cols.push({});
+  };
+
+  $scope.delete_row = function(row) {
+    $scope.cols.splice(row, 1);
+  };
   $scope.sendTable=function(){
       /* while compiling form , angular created this object*/
       console.log("[DEBUG] [REQUEST] sendTable inside ramanujanCtrl was called == Requests . . .")
       var data=$scope.table;  
+      data.cols = $scope.cols;
       console.log("[DEBUG] [REQUEST] just dumping the data json in here == ")
       console.log(data)
       /* post to server*/

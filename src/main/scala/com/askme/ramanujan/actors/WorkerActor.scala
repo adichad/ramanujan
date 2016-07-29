@@ -182,45 +182,55 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
           currBookMark = dataSource.getCurrBookMark()
           debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the current bookmark == " + currBookMark + " ##for## datasource == " + dataSource.toString())
 
-          val PKsAffectedDF: DataFrame = dataSource.getAffectedPKs(prevBookMark, currBookMark)
-          val affectedPKsCount: Long = PKsAffectedDF.count()
+          val PKsAffectedDFSource: DataFrame = dataSource.getAffectedPKs(prevBookMark, currBookMark)
+
+          val affectedPKsCount: Long = PKsAffectedDFSource.count()
           debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the count of PKs returned == " + affectedPKsCount + "##for## datasource == " + dataSource.toString())
 
           if (affectedPKsCount == 0) {
             info("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} no records to upsert in the internal Status Table == for bookmarks : " + prevBookMark + " ==and== " + currBookMark + " for table == " + dataSource.db + "_" + dataSource.table + " @host@ == " + dataSource.host)
           }
-
-          if (dataSource.hdfsPartitionCol.isEmpty() || dataSource.hdfsPartitionCol == dataSource.bookmark) {
-            debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} picking up the default partition column == " + dataSource.bookmark)
-            val partitionCol = dataSource.bookmark
-            val partitionColFunc = udf((ts: String, partKey: String) => {
-              partKey + "=" + ts.substring(0,10).replaceAll("[^A-Za-z0-9]", "_") // 10 digit partition size
-            })
-            val PKsAffectedDF_partition = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.bookmark), lit(partitionCol)))
-
-            sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource, hiveCon)
-
-            dataSource.insertInRunLogsPassed(hash)
-            dataSource.updateInRequestsPassed(hash)
-            dataSource.updateBookMark(currBookMark)
-            "[MY DEBUG STATEMENTS] run completed."
-          }
           else {
-            debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} picking up the input partition column == " + dataSource.hdfsPartitionCol)
-            val partitionCol = dataSource.hdfsPartitionCol
-            val partitionColFunc = udf((colName: String, partKey: String) => {
-              try {
-                partKey + "=" + colName.substring(0,10).replaceAll("[^A-Za-z0-9]", "_")
-              } catch {
-                case _: Throwable => {
-                  partKey + "=defaultNullPartition"
-                }
-              }
-            })
-            val PKsAffectedDF_partition: DataFrame = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.hdfsPartitionCol), lit(partitionCol)))
+            val PKsAffectedDF = dataSource.convertTargetTypes(PKsAffectedDFSource)
 
-            sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource, hiveCon)
-            "[MY DEBUG STATEMENTS] run completed."
+            if (dataSource.hdfsPartitionCol.isEmpty() || dataSource.hdfsPartitionCol == dataSource.bookmark) {
+              debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} picking up the default partition column == " + dataSource.bookmark)
+              val partitionCol = dataSource.bookmark
+              val partitionColFunc = udf((ts: String, partKey: String) => {
+                try {
+                  partKey + "=" + ts.substring(0, math.min(math.max(1, ts.length()), 10)).replaceAll("[^A-Za-z0-9]", "_") // 10 digit partition size
+                } catch {
+                  case _: Throwable => {
+                    partKey + "=defaultNullPartition"
+                  }
+                }
+              })
+              val PKsAffectedDF_partition = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.bookmark), lit(partitionCol)))
+
+              sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource, hiveCon)
+
+              dataSource.insertInRunLogsPassed(hash)
+              dataSource.updateInRequestsPassed(hash)
+              dataSource.updateBookMark(currBookMark)
+              "[MY DEBUG STATEMENTS] run completed."
+            }
+            else {
+              debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} picking up the input partition column == " + dataSource.hdfsPartitionCol)
+              val partitionCol = dataSource.hdfsPartitionCol
+              val partitionColFunc = udf((colName: String, partKey: String) => {
+                try {
+                  partKey + "=" + colName.substring(0, math.min(math.max(1, colName.length()), 10)).replaceAll("[^A-Za-z0-9]", "_")
+                } catch {
+                  case _: Throwable => {
+                    partKey + "=defaultNullPartition"
+                  }
+                }
+              })
+              val PKsAffectedDF_partition: DataFrame = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.hdfsPartitionCol), lit(partitionCol)))
+
+              sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource, hiveCon)
+              "[MY DEBUG STATEMENTS] run completed."
+            }
           }
         //} catch {
         //  case e : Exception => {
