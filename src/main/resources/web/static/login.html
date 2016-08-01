@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" data-ng-app="ramanujan">
+	<head>
+		<link rel="stylesheet" href="/web/static/css/app.css">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+		<script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+	</head>
+	<body>
+		<div class="jumbotron text-center" id="Intro">
+        	 <h2>Ramanujan - Our Reporting System Under Construction</h2>
+        	 <p>Ideas on building a full fledged System for good old reporting purposes</p>
+      	</div
+		<div class="container-fluid" width: 100%; margin: 5px; padding: 5px; >
+			<div class="well">
+			<h2> {{ message }} </h2>
+			<form name="login" action="/login" method="post" role="form">
+				<fieldset>
+					<legend> New Table Details: </legend>
+					<div class="form-group">
+						<label for="username">User Name: </label>
+						<input type="username" class="form-control" name="username" id="username" placeholder="Enter User . . ."  required>
+					</div>
+					<div class="form-group">
+						<label for="password">Password:</label>
+						<input type="password" class="form-control" name="password" id="password" placeholder="Enter Password . . ." required>
+					</div>
+				</fieldset>
+				<button type="submit" class="btn btn-default" >Login !</button>
+			</form>
+			</div>
+		</div>
+		<script src="/web/static/js/jquery.js"></script>
+    	<script src="/web/static/js/bootstrap.js"></script>
+    	<script src="/web/static/js/angular.js"></script>
+    	<script src="/web/static/js/angular-resource.js"></script>
+    	<script src="/web/static/js/controllers.js"></script>
+    	<script src="/web/static/js/services.js"></script>
+    	<script src="/web/static/js/app.js"></script>
+    	<script scr="/web/static/js/userInputSpecTypes.js"></script>
+	</body>
+</html>

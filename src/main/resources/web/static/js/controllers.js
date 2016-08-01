@@ -1,6 +1,6 @@
 'use strict';
 
-var ramanujanCtrl = function($scope,$http) {
+var ramanujanDBCtrl = function($scope,$http) {
    $scope.cols = [{}];
 
   $scope.add_row = function() {
@@ -12,14 +12,53 @@ var ramanujanCtrl = function($scope,$http) {
   };
   $scope.sendTable=function(){
       /* while compiling form , angular created this object*/
-      console.log("[DEBUG] [REQUEST] sendTable inside ramanujanCtrl was called == Requests . . .")
+      console.log("[DEBUG] [REQUEST] sendTable inside ramanujanDBCtrl was called == Requests . . .")
       var data=$scope.table;  
       data.cols = $scope.cols;
       console.log("[DEBUG] [REQUEST] just dumping the data json in here == ")
       console.log(data)
       /* post to server*/
       console.log("[DEBUG] [REQUEST] posting the data to api request url . . .")
-      $http.post('http://127.0.0.1:9999/api/request', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random())}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
+      $http.post('http://127.0.0.1:9999/api/request/rdbms', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random())}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
+      console.log("[DEBUG] [REQUEST] posted !")
+  }
+}
+
+var ramanujanLoginCtrl = function($scope,$http,$location) {
+  $scope.login=function(){
+      /* while compiling form , angular created this object*/
+      console.log("[DEBUG] [REQUEST] sendTable inside ramanujanLoginCtrl was called == Requests . . .")
+      var data=$scope.loginDetails;  
+      console.log("[DEBUG] [REQUEST] just dumping the data json in here == ")
+      console.log(data)
+      /* post to server*/
+      console.log("[DEBUG] [REQUEST] posting the data to api request url . . .")
+      $http.post('http://127.0.0.1:9999/login', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random());$location.path('/Ramanujan');}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
+      console.log("[DEBUG] [REQUEST] [LOGIN] posted !")
+  }
+}
+
+
+var ramanujanKafkaCtrl = function($scope,$http) {
+   $scope.kafkaCols = [{}];
+
+  $scope.add_row_kafka = function() {
+    $scope.kafkaCols.push({});
+  };
+
+  $scope.delete_row_kafka = function(row) {
+    $scope.kafkaCols.splice(row, 1);
+  };
+  $scope.sendTopic=function(){
+      /* while compiling form , angular created this object*/
+      console.log("[DEBUG] [REQUEST] sendTable inside ramanujanKafkaCtrl was called == Requests . . .")
+      var data=$scope.topic;  
+      data.kafkaCols = $scope.kafkaCols;
+      console.log("[DEBUG] [REQUEST] just dumping the data json in here == ")
+      console.log(data)
+      /* post to server*/
+      console.log("[DEBUG] [REQUEST] posting the data to api request url . . .")
+      $http.post('http://127.0.0.1:9999/api/request/kafka', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random())}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
       console.log("[DEBUG] [REQUEST] posted !")
   }
 }

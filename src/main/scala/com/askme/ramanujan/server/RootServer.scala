@@ -5,60 +5,63 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import com.askme.ramanujan.Configurable
-import com.askme.ramanujan.actors.{Listener, WorkerActor}
-import com.askme.ramanujan.util.DataSource
+import com.askme.ramanujan.actors.{KafkaWorkerActor, Listener, WorkerActor}
+import com.askme.ramanujan.util.{DataSource, KafkaSource}
 import com.typesafe.config.Config
 import grizzled.slf4j.Logging
 import org.apache.spark.SparkContext
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.SQLContext
+import org.apache.spark.streaming.{Seconds, StreamingContext}
 import spray.json.{DefaultJsonProtocol, _}
 
 class RootServer(val config: Config) extends Configurable with Server with Logging with Serializable {
-  
-		val conf = sparkConf("spark")
-		val sc: SparkContext = SparkContext.getOrCreate(conf) // ideally this is what one must do - getOrCreate
 
-		val customSparkListener: CustomSparkListener = new CustomSparkListener()
-	  sc.addSparkListener(customSparkListener)
+	val conf = sparkConf("spark")
+	val sc: SparkContext = SparkContext.getOrCreate(conf) // ideally this is what one must do - getOrCreate
 
-		// one sqlContext - to pass on
-		val sqlContext = new SQLContext(sc)
+	val customSparkListener: CustomSparkListener = new CustomSparkListener()
+	sc.addSparkListener(customSparkListener)
 
-		//create an actorSystem
-		info("creating the actor system == "+string("actorSystem.name"))
-	  private implicit val pipelineSystem = ActorSystem(string("actorSystem.name"))
+	val ssc = new StreamingContext(sc, Seconds(int("streaming.kafka.batchDuration")))
 
-	  // the listener, an option sys log class basically - one listener only
-	  info("creating the listener actor == "+string("actorSystem.actors.listener"))
-		val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener")) // one listener
+	// one sqlContext - to pass on
+	val sqlContext = new SQLContext(sc)
 
-//		val indexService = string("sinks.druid.overlord")//"overlord" // Your overlord's druid.service, with slashes replaced by colons.
-//		val firehosePattern = string("sinks.druid.firehose")//"druid:firehose:%s" // Make up a service pattern, include %s somewhere in it.
-//		val discoveryPath = string("sinks.druid.discovery")//"/druid/discovery" // Your overlord's druid.discovery.curator.path.
-//
-//		val curator = CuratorFrameworkFactory.builder().connectString(string("sinks.hdfs.zookeeper.url"))
-//		.retryPolicy(new ExponentialBackoffRetry(1000, 20, 30000))
-//		.build()
-//		curator.start()
+	//create an actorSystem
+	info("creating the actor system == "+string("actorSystem.name"))
+	private implicit val pipelineSystem = ActorSystem(string("actorSystem.name"))
 
-		// the master class
-		//info("creating the master actor == "+string("actorSystem.actors.master"))
-		//val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
-		// take a table in - completely? 
+	// the listener, an option sys log class basically - one listener only
+	info("creating the listener actor == "+string("actorSystem.actors.listener"))
+	val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener")) // one listener
 
-		val internalHost = string("db.internal.url") // get the host from env confs - tables bookmark & status mostly
-		val internalPort = string("db.internal.port") // get the port from env confs - tables bookmark & status mostly
-		val internalDB = string("db.internal.dbname") // get the port from env confs - tables bookmark & status mostly
-	  val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
-		val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
-		
-		val internalURL: String = string("db.conn.jdbc")+":"+string("db.conn.use")+"://"+internalHost+":"+internalPort+"/"+internalDB+"?zeroDateTimeBehavior=convertToNull" // the internal connection DB <status, bookmark, requests> etc
-		
-		var connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
+	//		val indexService = string("sinks.druid.overlord")//"overlord" // Your overlord's druid.service, with slashes replaced by colons.
+	//		val firehosePattern = string("sinks.druid.firehose")//"druid:firehose:%s" // Make up a service pattern, include %s somewhere in it.
+	//		val discoveryPath = string("sinks.druid.discovery")//"/druid/discovery" // Your overlord's druid.discovery.curator.path.
+	//
+	//		val curator = CuratorFrameworkFactory.builder().connectString(string("sinks.hdfs.zookeeper.url"))
+	//		.retryPolicy(new ExponentialBackoffRetry(1000, 20, 30000))
+	//		.build()
+	//		curator.start()
+
+	// the master class
+	//info("creating the master actor == "+string("actorSystem.actors.master"))
+	//val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
+	// take a table in - completely?
+
+	val internalHost = string("db.internal.url") // get the host from env confs - tables bookmark & status mostly
+	val internalPort = string("db.internal.port") // get the port from env confs - tables bookmark & status mostly
+	val internalDB = string("db.internal.dbname") // get the port from env confs - tables bookmark & status mostly
+	val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
+	val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
+
+	val internalURL: String = string("db.conn.jdbc")+":"+string("db.conn.use")+"://"+internalHost+":"+internalPort+"/"+internalDB+"?zeroDateTimeBehavior=convertToNull" // the internal connection DB <status, bookmark, requests> etc
+
+	var connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 
 	def transform(request: String) = {
-		var request_ = request.replaceAll("'","\"") // not needed anymore
+		val request_ = request.replaceAll("'","\"") // not needed anymore
 		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String,treatment: String)
 
 		object RequestJsonProtocol extends DefaultJsonProtocol {
@@ -93,23 +96,56 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		dataSource
 	}
 
-	  def getMins(freqScalar: String, freqUnitMeasure: String): Int = {
-		  if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.min"))){
-				freqScalar.toInt
-		  }
-			else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.hour"))){
-				freqScalar.toInt * 60 // ok if hardcoded
-		  }
-		  else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.day"))){
-				freqScalar.toInt * 1440 // ok if hardcoded
-		  }
-		  else  if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.week"))){
-				freqScalar.toInt * 10080 // ok if hardcoded
-		  }
-		  else {
-				freqScalar.toInt * 25200 * 4
-			}
-	  }
+	def transformKafka(request: String) = {
+		val request_ = request.replaceAll("'","\"")
+		case class RequestObject(cluster: String, topic: String, alias: String, groupName: String, reset_offset_on_start: String, auto_offset_reset: String, bookmark: String, bookmarkformat: String, primaryKey: String, partitionCol: String,druidMetrics: String,druidDims: String,treatment: String)
+
+		object RequestJsonProtocol extends DefaultJsonProtocol {
+			implicit val RequestFormat = jsonFormat13(RequestObject)
+		}
+
+		import RequestJsonProtocol._
+		val jsonValue = request_.parseJson //parequest_.parseJson
+
+		debug("[MY DEBUG STATEMENTS] [KAFKA] [transform json value] == "+jsonValue)
+
+		val requestObject = jsonValue.convertTo[RequestObject]
+
+		val cluster = requestObject.cluster // e.g 10.0.16.98
+		val topic = requestObject.topic
+		val alias = requestObject.alias // e.g 3306
+		val groupName = requestObject.groupName // e.g jyotishree
+		val reset_offset_on_start = requestObject.reset_offset_on_start // e.g getit1234
+		val auto_offset_reset = requestObject.auto_offset_reset // e.g payments
+		val bookmark = requestObject.bookmark // e.g txn_tab
+		val bookmarkformat = requestObject.bookmarkformat // bookmark key, e.g timestamp
+		val primaryKey = requestObject.primaryKey // format of bookmark e.g dd-mm-YYYYTHH:MM:SSZ
+		val partitionCol = requestObject.partitionCol // primaryKey
+		val druidMetrics = requestObject.druidMetrics // e.g com.sql.MySQL.driver
+		val druidDims = requestObject.druidDims // fully qualified table schema
+		val treatment = requestObject.treatment
+
+		val kafkaSource = new KafkaSource(config,cluster,topic,alias,groupName,reset_offset_on_start,auto_offset_reset,bookmark,bookmarkformat,primaryKey,partitionCol,druidMetrics,druidDims,treatment)
+		kafkaSource
+	}
+
+	def getMins(freqScalar: String, freqUnitMeasure: String): Int = {
+		if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.min"))){
+			freqScalar.toInt
+		}
+		else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.hour"))){
+			freqScalar.toInt * 60 // ok if hardcoded
+		}
+		else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.day"))){
+			freqScalar.toInt * 1440 // ok if hardcoded
+		}
+		else  if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.week"))){
+			freqScalar.toInt * 10080 // ok if hardcoded
+		}
+		else {
+			freqScalar.toInt * 25200 * 4
+		}
+	}
 
 	def randomString(length: Int) = scala.util.Random.alphanumeric.take(length).mkString
 
@@ -131,88 +167,133 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		//druidActor ! new DruidMessage(listener,dataSource,hash)
 	}
 
+	def startAStream(cluster: String, topic: String, alias: String, groupName: String, currentDateStr: String, runStreamingMessage: String, request: String): Unit = {
+		val hash = randomString(10)
+		val insertkafkaRecRunningLOGS = "INSERT INTO `"+string("db.internal.tables.kafkaRunninglogs.name")+"` (`"+string("db.internal.tables.kafkaRunninglogs.cols.cluster")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.topic")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.alias")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.groupName")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+cluster+"','"+topic+"','"+alias+"','"+groupName+"','"+currentDateStr+"','"+hash+"','none','"+runStreamingMessage+"')"
+		val insertkafkaRecRunningStatement = connection.createStatement()
+		insertkafkaRecRunningStatement.executeUpdate(insertkafkaRecRunningLOGS)
+		Thread sleep 1000
+		val updatekafkaRequestsRunningQuery = "UPDATE "+string("db.internal.tables.kafkaRequests.name")+" SET "+string("db.internal.tables.kafkaRequests.cols.currentState")+" = \""+string("db.internal.tables.kafkaRequests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.kafkaRequests.cols.cluster")+" = \""+cluster+"\" and "+string("db.internal.tables.kafkaRequests.cols.topic")+" = \""+topic+"\" and "+string("db.internal.tables.kafkaRequests.cols.groupName")+" = \""+groupName+"\" and "+string("db.internal.tables.kafkaRequests.cols.alias")+" = \""+alias+"\""
+		val updatekafkaRequestsRunningstatement = connection.createStatement()
+		updatekafkaRequestsRunningstatement.executeUpdate(updatekafkaRequestsRunningQuery)
+
+		val kafkaSource = transformKafka(request)
+
+		val kafkaWorkerActor = pipelineSystem.actorOf(Props(classOf[KafkaWorkerActor],config))
+		kafkaWorkerActor ! new KafkaMessage(listener,kafkaSource,hash)
+		//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
+		//druidActor ! new DruidMessage(listener,dataSource,hash)
+	}
+
+	val kafkaStatement = connection.createStatement()
+
+	val getAllKafkaRequestsQuery = "SELECT * FROM "+string("db.internal.tables.kafkaRequests.name")
+	val kafkaResultSet = kafkaStatement.executeQuery(getAllKafkaRequestsQuery)
+
+	while(kafkaResultSet.next()){
+		// metadata
+		val processDate = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.processDate"))
+		val request = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.request"))
+		val cluster = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.cluster"))
+		val topic = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.topic"))
+		val alias = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.alias"))
+		val groupName = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.groupName"))
+		// health
+		val currentState = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.currentState"))
+		val exceptions = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.exceptions"))
+		val notes = kafkaResultSet.getString(string("db.internal.tables.kafkaRequests.cols.notes"))
+
+		val format = new java.text.SimpleDateFormat(string("db.internal.tables.kafkaRequests.defs.defaultDateFormat"))
+		val currentDateDate = Calendar.getInstance().getTime()
+		val currentDateStr = format.format(currentDateDate)
+
+		val runStreamingMessage = "starting the first Run Ever . . ."
+		startAStream(cluster,topic,alias,groupName,currentDateStr,runStreamingMessage,request)
+	}
+
 	while(true) {
-			val statement = connection.createStatement()
-			val getAllRequestsQuery = "SELECT * FROM "+string("db.internal.tables.requests.name")
-			val resultSet = statement.executeQuery(getAllRequestsQuery)
+		val statement = connection.createStatement()
 
-			while(resultSet.next()){
-				// metadata
-				val processDate = resultSet.getString(string("db.internal.tables.requests.cols.processDate"))
-				val request = resultSet.getString(string("db.internal.tables.requests.cols.request"))
-				val host = resultSet.getString(string("db.internal.tables.requests.cols.host"))
-				val port = resultSet.getString(string("db.internal.tables.requests.cols.port"))
-				val dbname = resultSet.getString(string("db.internal.tables.requests.cols.dbname"))
-				val dbtable = resultSet.getString(string("db.internal.tables.requests.cols.dbtable"))
-				// health
-				val lastStarted = resultSet.getString(string("db.internal.tables.requests.cols.lastStarted"))
-				val lastEnded = resultSet.getString(string("db.internal.tables.requests.cols.lastEnded"))
-				val runFrequency = resultSet.getString(string("db.internal.tables.requests.cols.runFrequency"))
-				val totalRuns = resultSet.getString(string("db.internal.tables.requests.cols.totalRuns"))
-				val successRuns = resultSet.getString(string("db.internal.tables.requests.cols.success"))
-				val failureRuns = resultSet.getString(string("db.internal.tables.requests.cols.failure"))
-				val currentState = resultSet.getString(string("db.internal.tables.requests.cols.currentState"))
-				val exceptions = resultSet.getString(string("db.internal.tables.requests.cols.exceptions"))
-				val notes = resultSet.getString(string("db.internal.tables.requests.cols.notes"))
+		val getAllRequestsQuery = "SELECT * FROM "+string("db.internal.tables.requests.name")
+		val resultSet = statement.executeQuery(getAllRequestsQuery)
 
-				//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current dataSource == "+request.toString())
+		while(resultSet.next()){
+			// metadata
+			val processDate = resultSet.getString(string("db.internal.tables.requests.cols.processDate"))
+			val request = resultSet.getString(string("db.internal.tables.requests.cols.request"))
+			val host = resultSet.getString(string("db.internal.tables.requests.cols.host"))
+			val port = resultSet.getString(string("db.internal.tables.requests.cols.port"))
+			val dbname = resultSet.getString(string("db.internal.tables.requests.cols.dbname"))
+			val dbtable = resultSet.getString(string("db.internal.tables.requests.cols.dbtable"))
+			// health
+			val lastStarted = resultSet.getString(string("db.internal.tables.requests.cols.lastStarted"))
+			val lastEnded = resultSet.getString(string("db.internal.tables.requests.cols.lastEnded"))
+			val runFrequency = resultSet.getString(string("db.internal.tables.requests.cols.runFrequency"))
+			val totalRuns = resultSet.getString(string("db.internal.tables.requests.cols.totalRuns"))
+			val successRuns = resultSet.getString(string("db.internal.tables.requests.cols.success"))
+			val failureRuns = resultSet.getString(string("db.internal.tables.requests.cols.failure"))
+			val currentState = resultSet.getString(string("db.internal.tables.requests.cols.currentState"))
+			val exceptions = resultSet.getString(string("db.internal.tables.requests.cols.exceptions"))
+			val notes = resultSet.getString(string("db.internal.tables.requests.cols.notes"))
 
-				// val format = new SimpleDateFormat"%Y-%m-%d %H:%M:%S")
-				val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
-				val lastStartedDate = format.parse(lastStarted)
-				val lastEndedDate = format.parse(lastEnded)
+			//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current dataSource == "+request.toString())
 
-				val currentDateDate = Calendar.getInstance().getTime()
-				val currentDateStr = format.format(currentDateDate)
+			// val format = new SimpleDateFormat"%Y-%m-%d %H:%M:%S")
+			val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
+			val lastStartedDate = format.parse(lastStarted)
+			val lastEndedDate = format.parse(lastEnded)
 
-				if(totalRuns.toInt == 0){ // start it. the first time
-					val runStartMessage = "starting the first Run Ever . . ."
-					startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
-				}
-				else{
-					val diffInMinsEndedStarted = TimeUnit.MINUTES.convert(lastEndedDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
-					if(diffInMinsEndedStarted < 0){ // it must be either still running or failed !
-							if(currentState == string("db.internal.tables.requests.defs.defaultRunningState")){
-							}
-							else{
-								//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [ALERT] encountered some exception in last run == "+exceptions+" for dataSource == "+request)
-								//debug("[MY DEBUG STATEMENTS] ##re-running , ##re-trying . . .$ db == "+dbname+" @and@ $ table == "+dbtable)
+			val currentDateDate = Calendar.getInstance().getTime()
+			val currentDateStr = format.format(currentDateDate)
 
-								val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
-
-								val schedulingFrequencyParts = runFrequency.trim().split(" ")
-
-								val freqScalar = schedulingFrequencyParts(0)
-								val freqUnitMeasure = schedulingFrequencyParts(1)
-								val freqInMins = getMins(freqScalar,freqUnitMeasure)
-
-								if(diffInMinsCurrentStarted > freqInMins){
-									val runStartMessage = "starting the Next Run | previous NOT OK . . ."
-									startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
-								}
-								else{
-								}
-							}
+			if(totalRuns.toInt == 0){ // start it. the first time
+			val runStartMessage = "starting the first Run Ever . . ."
+				startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
+			}
+			else{
+				val diffInMinsEndedStarted = TimeUnit.MINUTES.convert(lastEndedDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
+				if(diffInMinsEndedStarted < 0){ // it must be either still running or failed !
+					if(currentState == string("db.internal.tables.requests.defs.defaultRunningState")){
 					}
-					else {
+					else{
+						//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [ALERT] encountered some exception in last run == "+exceptions+" for dataSource == "+request)
+						//debug("[MY DEBUG STATEMENTS] ##re-running , ##re-trying . . .$ db == "+dbname+" @and@ $ table == "+dbtable)
+
 						val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
+
 						val schedulingFrequencyParts = runFrequency.trim().split(" ")
 
-						val freqScalar = schedulingFrequencyParts(0).trim()
-						val freqUnitMeasure = schedulingFrequencyParts(1).trim()
+						val freqScalar = schedulingFrequencyParts(0)
+						val freqUnitMeasure = schedulingFrequencyParts(1)
 						val freqInMins = getMins(freqScalar,freqUnitMeasure)
 
 						if(diffInMinsCurrentStarted > freqInMins){
-							val runStartMessage = "starting the Next Run | previous OK . . ."
+							val runStartMessage = "starting the Next Run | previous NOT OK . . ."
 							startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 						}
 						else{
 						}
 					}
 				}
+				else {
+					val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
+					val schedulingFrequencyParts = runFrequency.trim().split(" ")
+
+					val freqScalar = schedulingFrequencyParts(0).trim()
+					val freqUnitMeasure = schedulingFrequencyParts(1).trim()
+					val freqInMins = getMins(freqScalar,freqUnitMeasure)
+
+					if(diffInMinsCurrentStarted > freqInMins){
+						val runStartMessage = "starting the Next Run | previous OK . . ."
+						startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
+					}
+					else{
+					}
+				}
 			}
 		}
-		connection.close()
+	}
+	connection.close()
 
 	class CustomSparkListener extends SparkListener {
 		override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd) {
@@ -285,6 +366,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 sealed trait PipeMessage
 case class TableMessage(listener: ActorRef, dataSource: DataSource, hash: String) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
+case class KafkaMessage(listener: ActorRef, kafkaSource: KafkaSource, hash: String) extends PipeMessage {require(!kafkaSource.topic.isEmpty(), "topic field cannot be empty");require(!kafkaSource.cluster.isEmpty(), "cluster field cannot be empty")}
 case class DruidMessage(listener: ActorRef, dataSource: DataSource, hash: String) extends PipeMessage {require(!dataSource.table.isEmpty(), "table field cannot be empty");require(!dataSource.db.isEmpty(), "db field cannot be empty")}
 case class WorkerDone(dataSource: DataSource) extends PipeMessage
 case class WorkerExecuting(dataSource: DataSource) extends PipeMessage

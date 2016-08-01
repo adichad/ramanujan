@@ -1,6 +1,21 @@
 CREATE DATABASE IF NOT EXISTS Ramanujan;
 USE Ramanujan;
+
+CREATE TABLE IF NOT EXISTS users(
+   id INT NOT NULL AUTO_INCREMENT,
+   username VARCHAR(100) NOT NULL,
+   password VARCHAR(100) NOT NULL,
+   PRIMARY KEY ( id )
+);
+
 CREATE TABLE IF NOT EXISTS BookMarks(
+   id INT NOT NULL AUTO_INCREMENT,
+   primarykey VARCHAR(100) NOT NULL,
+   bookmark VARCHAR(100) NOT NULL,
+   PRIMARY KEY ( id )
+);
+
+CREATE TABLE IF NOT EXISTS kafkaBookMarks(
    id INT NOT NULL AUTO_INCREMENT,
    primarykey VARCHAR(100) NOT NULL,
    bookmark VARCHAR(100) NOT NULL,
@@ -15,6 +30,13 @@ CREATE TABLE IF NOT EXISTS VarTypeRecordsTable (
    PRIMARY KEY (tablename,colname)
 );
 
+CREATE TABLE IF NOT EXISTS kafkaVarTypeRecordsTable (
+   topicname VARCHAR(100) NOT NULL,
+   kafkaColname VARCHAR(100) NOT NULL,
+   kafkaUsertype VARCHAR(100) NOT NULL,
+   PRIMARY KEY (topicname,kafkaColname)
+);
+
 CREATE TABLE IF NOT EXISTS RunningLOGS (
    id INT NOT NULL AUTO_INCREMENT,
    host VARCHAR(100) NOT NULL,
@@ -25,6 +47,19 @@ CREATE TABLE IF NOT EXISTS RunningLOGS (
    hash VARCHAR(100) NOT NULL,
    exceptions VARCHAR(1024) NOT NULL,
    notes VARCHAR(1024) NOT NULL,
+   PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS kafkaRunningLOGS (
+   id INT NOT NULL AUTO_INCREMENT,
+   cluster VARCHAR(100) NOT NULL,
+   topic VARCHAR(100) NOT NULL,
+   alias VARCHAR(100) NOT NULL,
+   groupName VARCHAR(100) NOT NULL,
+   runTimeStamp VARCHAR(100) NOT NULL,
+   hash VARCHAR(100) NOT NULL,
+   exceptions VARCHAR(100) NOT NULL,
+   notes VARCHAR(100) NOT NULL,
    PRIMARY KEY (id)
 );
 
@@ -56,4 +91,31 @@ CREATE TABLE IF NOT EXISTS Requests(
    exceptions VARCHAR(1024),
    notes VARCHAR(1024), 
    PRIMARY KEY (host, dbname, dbtable)
+);
+
+CREATE TABLE IF NOT EXISTS kafkaRequests(
+   processDate DATETIME,
+   request VARCHAR(4096) NOT NULL,
+   cluster VARCHAR(100) NOT NULL,
+   topic VARCHAR(100) NOT NULL,
+   alias VARCHAR(100) NOT NULL,
+   groupName VARCHAR(100) NOT NULL,
+   totalRuns INT(11) NOT NULL,
+   successRuns INT(11) NOT NULL,
+   failureRuns INT(11) NOT NULL,
+   currentState VARCHAR(64) NOT NULL,
+   exceptions VARCHAR(1024),
+   notes VARCHAR(1024), 
+   PRIMARY KEY (cluster, topic, alias)
+);
+
+CREATE TABLE IF NOT EXISTS Queries(
+   id INT NOT NULL AUTO_INCREMENT,
+   query_type VARCHAR(8) NOT NULL,
+   query_loc VARCHAR(100) NOT NULL,
+   output_loc VARCHAR(100) NOT NULL,
+   runtype VARCHAR(100) NOT NULL,
+   schedule VARCHAR(100) NOT NULL,
+   subject VARCHAR(100) NOT NULL
+   PRIMARY KEY (id)
 );

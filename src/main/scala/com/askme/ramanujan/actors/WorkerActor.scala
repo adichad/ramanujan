@@ -78,8 +78,8 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
       if(!parentPathExistsBefore){
         hdfs.mkdirs(new Path(parentHDFSPath))
-        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
-        //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_"+(dataSource.host).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_"+(dataSource.host).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
         debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         val hiveCreateTableStmt = hiveCon.createStatement()
         val createTableRes = hiveCreateTableStmt.execute(parentTableCreateQuery)
@@ -130,7 +130,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
         df_dedupe_.write.format("com.databricks.spark.csv").option("delimiter","\t").save(hdfspath)
 
         //val partitionAddQuery = "ALTER TABLE hive_table_"+(dataSource.host).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
-        val partitionAddQuery = "ALTER TABLE hive_table_tsv_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
+        val partitionAddQuery = "ALTER TABLE hive_table_parquet_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
         debug("[MY DEBUG STATEMENTS] [ALTER TABLES] [HIVE QUERY] == "+partitionAddQuery)
         val hiveAddPartitionStmt = hiveCon.createStatement()
         val addPartitionHiveRes = hiveAddPartitionStmt.execute(partitionAddQuery)
@@ -232,15 +232,6 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
               "[MY DEBUG STATEMENTS] run completed."
             }
           }
-        //} catch {
-        //  case e : Exception => {
-        //    debug("[MY DEBUG STATEMENTS] [FUTURE] [FAILURE] [EXCEPTION] execution failed for data source == "+dataSource.toString()+ " @and@ hash == "+hash)
-        //    debug("[MY DEBUG STATEMENTS] [FUTURE] [FAILURE] [EXCEPTION] reasons for failure data source == "+dataSource.toString()+ " @and@ hash == "+hash + " was ### "+e)
-        //    e.printStackTrace
-        //    dataSource.insertInRunLogsFailed(hash,e)
-        //    dataSource.updateInRequestsFailed(hash,e)
-        //  }
-        //}
       }(ExecutionContext.Implicits.global) onComplete {
         case Success(value) => {
           listener ! "[MY DEBUG STATEMENTS] [FUTURE] [COMPLETE] Completed Successfully a run for the datasource == " + dataSource.toString()

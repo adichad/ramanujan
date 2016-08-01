@@ -46,16 +46,17 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 
 	// skip  / report / fail
 	val longToDouble = udf((col: String, treatment: String) => {
-		if(treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report"){
-			try{
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
 				col.toDouble
 			} catch {
-				case e : Throwable => {
-					if(treatment.toLowerCase() == "skip"){
-						0.00
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Double()
 					}
-					else if(treatment.toLowerCase() == "report"){
-						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == "+e.printStackTrace())
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Double()
 					}
 					else {
 						col.toDouble
@@ -64,132 +65,271 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			}
 		}
 		else{
-
-		}
-		try{
 			col.toDouble
-		} catch {
-			case e : Throwable => {
-				if(treatment.toLowerCase() == "skip"){
-					0.00
-				}
-				else if(treatment.toLowerCase() == "report"){
-					debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == "+e.printStackTrace())
-				}
-				else {
-
-				}
-			}
 		}
 	} )
 
 	val longToInt = udf((col: String, treatment: String) => {
-		try{
-			col.toInt
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toInt
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Int()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Int()
+					}
+					else {
+						col.toInt
+					}
+				}
 			}
+		}
+		else{
+			col.toInt
 		}
 	} )
 
 	val longToString = udf((col: String, treatment: String) => {
-		try{
-			col.toString
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toString
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new String()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new String()
+					}
+					else {
+						col.toString
+					}
+				}
 			}
+		}
+		else{
+			col.toString
 		}
 	} )
 
-	val stringToInt    = udf((col: String, treatment: String) => {
-		try{
-			col.toInt
-		} catch {
-			case _ : Throwable => {
-
+	val stringToInt = udf((col: String, treatment: String) => {
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toInt
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Int()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Int()
+					}
+					else {
+						col.toInt
+					}
+				}
 			}
+		}
+		else{
+			col.toInt
 		}
 	} )
 
 	val stringToLong = udf((col: String, treatment: String) => {
-		try{
-			col.toLong
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toLong
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Long()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Long()
+					}
+					else {
+						col.toLong
+					}
+				}
 			}
+		}
+		else{
+			col.toLong
 		}
 	} )
 
 	val stringToDouble = udf((col: String, treatment: String) => {
-		try{
-			col.toDouble
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toDouble
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Double()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Double()
+					}
+					else {
+						col.toDouble
+					}
+				}
 			}
+		}
+		else{
+			col.toDouble
 		}
 	} )
 
 	val intToLong = udf((col: String, treatment: String) => {
-		try{
-			col.toLong
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toLong
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Long()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Long()
+					}
+					else {
+						col.toLong
+					}
+				}
 			}
+		}
+		else{
+			col.toLong
 		}
 	} )
 
 	val intToString = udf((col: String, treatment: String) => {
-		try{
-			col.toString
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toString
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new String()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new String()
+					}
+					else {
+						col.toString
+					}
+				}
 			}
+		}
+		else{
+			col.toString
 		}
 	} )
 
 	val intToDouble = udf((col: String, treatment: String) => {
-		try{
-			col.toDouble
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toDouble
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Double()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Double()
+					}
+					else {
+						col.toDouble
+					}
+				}
 			}
+		}
+		else{
+			col.toDouble
 		}
 	} )
 
 	val doubleToInt = udf((col: String, treatment: String) => {
-		try{
-			col.toInt
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toInt
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Int()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Int()
+					}
+					else {
+						col.toInt
+					}
+				}
 			}
+		}
+		else{
+			col.toInt
 		}
 	} )
 
 	val doubleToLong = udf((col: String, treatment: String) => {
-		try{
-			col.toLong
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toLong
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new Long()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new Long()
+					}
+					else {
+						col.toLong
+					}
+				}
 			}
+		}
+		else{
+			col.toLong
 		}
 	} )
 
 	val doubleToString = udf((col: String, treatment: String) => {
-		try{
-			col.toString
-		} catch {
-			case _ : Throwable => {
-
+		if (treatment.toLowerCase() == "skip" || treatment.toLowerCase() == "report") {
+			try {
+				col.toString
+			} catch {
+				case e: Throwable => {
+					if (treatment.toLowerCase() == "skip") {
+						new String()
+					}
+					else if (treatment.toLowerCase() == "report") {
+						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
+						new String()
+					}
+					else {
+						col.toString
+					}
+				}
 			}
+		}
+		else{
+			col.toString
 		}
 	} )
 
@@ -321,7 +461,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		statement.executeUpdate(insertRequestQuery)
 		internalConnection.close()
 	}
-	// Update insertInRunLogsPassed
+
 	def insertInRunLogsPassed(hash: String) = {
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
@@ -332,7 +472,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		statement.executeUpdate(insertPassLogQuery)
 		internalConnection.close()
 	}
-	// Update insertInRequestsPassed
+
 	def updateInRequestsPassed(hash: String) = {
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
@@ -343,7 +483,6 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		statement.executeUpdate(insertReqPassedQuery)
 		internalConnection.close()
 	}
-	// Update insertInRunLogsFailed
 	def updateInRequestsFailed(hash: String, value: Exception) = {
 		val strValue = value.toString().substring(0,math.min(value.toString().length(),int("db.internal.tables.requests.defs.excStrEnd")))
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
@@ -368,6 +507,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		statement.executeUpdate(insertFailLogQuery)
 		internalConnection.close()
 	}
+
 	def insertInRunLogsStarted(hash: String) = {
 		val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 		val currentDateDate = Calendar.getInstance().getTime()
@@ -382,7 +522,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	def updateBookMark(currBookMark: String) = {
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		debug("INSERT INTO `"+string("db.internal.tables.bookmarks.name")+"` (`"+string("db.internal.tables.bookmarks.cols.dbtablekey")+"`,"+string("db.internal.tables.bookmarks.cols.bookmarkId")+") VALUES( '"+db+"_"+table+"', '"+currBookMark+"')")
+		debug("INSERT INTO `"+string("db.internal.tables.bookmarks.name")+"` (`"+string("db.internal.tables.bookmarks.cols.dbtablekey")+"`,"+string("db.internal.tables.bookmarks.cols.bookmarkId")+") VALUES( '"+alias+"_"+db+"_"+table+"', '"+currBookMark+"')")
 		val insertBkMrkQuery = "INSERT INTO `"+string("db.internal.tables.bookmarks.name")+"` (`"+string("db.internal.tables.bookmarks.cols.dbtablekey")+"`,"+string("db.internal.tables.bookmarks.cols.bookmarkId")+") VALUES( '"+db+"_"+table+"', '"+currBookMark+"')"
 		statement.executeUpdate(insertBkMrkQuery)
 		internalConnection.close()
