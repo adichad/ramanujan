@@ -173,7 +173,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		val insertkafkaRecRunningStatement = connection.createStatement()
 		insertkafkaRecRunningStatement.executeUpdate(insertkafkaRecRunningLOGS)
 		Thread sleep 1000
-		val updatekafkaRequestsRunningQuery = "UPDATE "+string("db.internal.tables.kafkaRequests.name")+" SET "+string("db.internal.tables.kafkaRequests.cols.currentState")+" = \""+string("db.internal.tables.kafkaRequests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.kafkaRequests.cols.cluster")+" = \""+cluster+"\" and "+string("db.internal.tables.kafkaRequests.cols.topic")+" = \""+topic+"\" and "+string("db.internal.tables.kafkaRequests.cols.groupName")+" = \""+groupName+"\" and "+string("db.internal.tables.kafkaRequests.cols.alias")+" = \""+alias+"\""
+		val updatekafkaRequestsRunningQuery = "UPDATE "+string("db.internal.tables.kafkaRequests.name")+" SET "+string("db.internal.tables.kafkaRequests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.kafkaRequests.cols.currentState")+" = \""+string("db.internal.tables.kafkaRequests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.kafkaRequests.cols.cluster")+" = \""+cluster+"\" and "+string("db.internal.tables.kafkaRequests.cols.topic")+" = \""+topic+"\" and "+string("db.internal.tables.kafkaRequests.cols.groupName")+" = \""+groupName+"\" and "+string("db.internal.tables.kafkaRequests.cols.alias")+" = \""+alias+"\""
 		val updatekafkaRequestsRunningstatement = connection.createStatement()
 		updatekafkaRequestsRunningstatement.executeUpdate(updatekafkaRequestsRunningQuery)
 
@@ -184,7 +184,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
 		//druidActor ! new DruidMessage(listener,dataSource,hash)
 	}
-
+	/* commenting kafka streaming - the approach needs to be changed
 	val kafkaStatement = connection.createStatement()
 
 	val getAllKafkaRequestsQuery = "SELECT * FROM "+string("db.internal.tables.kafkaRequests.name")
@@ -210,6 +210,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		val runStreamingMessage = "starting the first Run Ever . . ."
 		startAStream(cluster,topic,alias,groupName,currentDateStr,runStreamingMessage,request)
 	}
+	*/
 
 	while(true) {
 		val statement = connection.createStatement()
@@ -292,6 +293,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 				}
 			}
 		}
+		Thread sleep 600000 // avoiding gc overhead.
 	}
 	connection.close()
 

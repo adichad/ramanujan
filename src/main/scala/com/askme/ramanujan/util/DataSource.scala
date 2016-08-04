@@ -24,7 +24,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	def sqlToHiveDataTypeMapping(coltype: String): String = {
 		//HIVE -> INT, BIGINT , FLOAT , DOUBLE , DECIMAL , TIMESTAMP , DATE , STRING , VARCHAR , CHAR , BOOLEAN
 		//SQL -> int,varchar,binary,timestamp,date,time,datetime,float,int
-		val typeConversionsSQLtoHIVEMap = Map("int" -> "INT", "binary" -> "BOOLEAN", "varchar" -> "STRING", "date" -> "DATE", "time" -> "TIMESTAMP", "float" -> "FLOAT")
+		val typeConversionsSQLtoHIVEMap = Map("NUMERIC" -> "DOUBLE","DECIMAL" -> "DOUBLE","VARBINARY"->"STRING","BINARY" -> "STRING","CHARACTER" -> "STRING","tinyint(1)" -> "BOOLEAN", "int" -> "BIGINT", "binary" -> "BOOLEAN", "varchar" -> "STRING", "date" -> "DATE", "time" -> "TIMESTAMP", "float" -> "FLOAT")
 		var hiveType = "STRING"
 		typeConversionsSQLtoHIVEMap.keys.foreach {
 			k => if(coltype.toLowerCase().contains(k)) { hiveType = typeConversionsSQLtoHIVEMap(k) }
@@ -52,11 +52,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Double()
+						null.asInstanceOf[Double]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Double()
+						null.asInstanceOf[Double]
 					}
 					else {
 						col.toDouble
@@ -76,11 +76,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Int()
+						null.asInstanceOf[Int]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Int()
+						null.asInstanceOf[Int]
 					}
 					else {
 						col.toInt
@@ -100,11 +100,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new String()
+						null.asInstanceOf[String]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new String()
+						null.asInstanceOf[String]
 					}
 					else {
 						col.toString
@@ -124,11 +124,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Int()
+						null.asInstanceOf[Int]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Int()
+						null.asInstanceOf[Int]
 					}
 					else {
 						col.toInt
@@ -148,11 +148,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Long()
+						null.asInstanceOf[Long]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Long()
+						null.asInstanceOf[Long]
 					}
 					else {
 						col.toLong
@@ -172,11 +172,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Double()
+						null.asInstanceOf[Double]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Double()
+						null.asInstanceOf[Double]
 					}
 					else {
 						col.toDouble
@@ -196,11 +196,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Long()
+						null.asInstanceOf[Long]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Long()
+						null.asInstanceOf[Long]
 					}
 					else {
 						col.toLong
@@ -220,11 +220,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new String()
+						null.asInstanceOf[String]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new String()
+						null.asInstanceOf[String]
 					}
 					else {
 						col.toString
@@ -244,11 +244,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Double()
+						null.asInstanceOf[Double]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Double()
+						null.asInstanceOf[Double]
 					}
 					else {
 						col.toDouble
@@ -268,11 +268,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Int()
+						null.asInstanceOf[Int]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Int()
+						null.asInstanceOf[Int]
 					}
 					else {
 						col.toInt
@@ -292,11 +292,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new Long()
+						null.asInstanceOf[Long]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new Long()
+						null.asInstanceOf[Long]
 					}
 					else {
 						col.toLong
@@ -316,11 +316,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			} catch {
 				case e: Throwable => {
 					if (treatment.toLowerCase() == "skip") {
-						new String()
+						null.asInstanceOf[String]
 					}
 					else if (treatment.toLowerCase() == "report") {
 						debug("[MY DEBUG STATEMENTS] [EXCEPTION] [USER TYPE CONVERSIONS] reporting the exception == " + e.printStackTrace())
-						new String()
+						null.asInstanceOf[String]
 					}
 					else {
 						col.toString
@@ -502,7 +502,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val currentDateStr = format.format(currentDateDate)
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
 		val statement = internalConnection.createStatement()
-		val insertFailLogQuery = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','"+strValue+"','the run has failed . . .')"
+		val insertFailLogQuery = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES ('"+host+"','"+port+"','"+db+"','"+table+"','"+currentDateStr+"','"+hash+"','"+strValue.replaceAll("[^a-zA-Z]", "")+"','the run has failed . . .')"
 		debug("[MY DEBUG STATEMENTS] INSERT LOG FAIL QUERY == "+insertFailLogQuery)
 		statement.executeUpdate(insertFailLogQuery)
 		internalConnection.close()
@@ -665,7 +665,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 		val sc = SparkContext.getOrCreate(conf)
 		val sqlContext = new SQLContext(sc)
 
-		val getAffectedPKsSparkQuery = "(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" and "+bookmark+" IS NOT NULL and "+bookmark+" > '2016-07-22' order by "+bookmark+" desc limit 2000) overtmp_"+alias+"_"+db+"_"+table
+		val getAffectedPKsSparkQuery = "(select "+fullTableSchema+" from "+table+" where "+bookmark+" >= \""+prevBookMark+"\" and "+bookmark+" <= \""+currBookMark+"\" and "+bookmark+" IS NOT NULL and "+bookmark+" > '2016-07-22' order by "+bookmark+" desc) overtmp_"+alias+"_"+db+"_"+table
 
 
 		debug("[MY DEBUG STATEMENTS] [SQL] [AFFECTED PKs] getting it . . . ")
@@ -673,7 +673,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype,
-					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password+"?zeroDateTimeBehavior=convertToNull"),
+					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?zeroDateTimeBehavior=convertToNull&user="+user+"&password="+password),
 					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
@@ -683,7 +683,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype, // "org.postgresql.Driver"
-					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password+"?zeroDateTimeBehavior=convertToNull"),
+					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?zeroDateTimeBehavior=convertToNull&user="+user+"&password="+password),
 					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()
@@ -693,7 +693,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val jdbcDF = sqlContext.read.format(string("db.conn.jdbc")).options(
 				Map(
 					"driver" -> conntype, // "com.microsoft.sqlserver.jdbc.SQLServerDriver"
-					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?user="+user+"&password="+password+"?zeroDateTimeBehavior=convertToNull"),
+					"url" -> (string("db.conn.jdbc")+":"+string("db.type.mysql")+"://"+host+":"+port+"/"+db+"?zeroDateTimeBehavior=convertToNull&user="+user+"&password="+password),
 					"dbtable" -> (getAffectedPKsSparkQuery)
 				)
 			).load()

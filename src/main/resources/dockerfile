@@ -1,0 +1,26 @@
+# our base image
+FROM ubuntu:14.04
+
+RUN apt-get update
+RUN echo Y | apt-get upgrade
+RUN echo Y | apt-get install libmysqlclient-dev python-dev
+
+MAINTAINER Khanna <sumit.khanna@aksme.in>
+COPY ./requirements.txt /tmp/requirements.txt
+
+RUN echo Y | apt-get install python-numpy
+RUN echo Y | apt-get install python-scipy
+RUN echo Y | apt-get install python-pandas
+RUN echo Y | apt-get install python-numexpr
+RUN echo Y | apt-get install python-pip
+
+RUN pip install -r /tmp/requirements.txt
+
+COPY . /apps/ramanujanserver/
+WORKDIR /apps/ramanujanserver/
+
+# specify the port number the container should expose
+EXPOSE 9999
+
+# run the application
+CMD ["python", "server.py"]

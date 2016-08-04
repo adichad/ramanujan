@@ -62,15 +62,19 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
       val df_ = byPartitionArray(i)
       //val hiveContext = new org.apache.spark.sql.hive.HiveContext(sc)
 
-      val parentHDFSPath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/tsv_"+alias+"_"+dbname+"_"+dbtable
+      //val parentHDFSPath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/parquet1_"+alias+"_"+dbname+"_"+dbtable
+      val parentHDFSPath = "hdfs://"+string("sinks.hdfs.url")+"/parquet1_"+alias+"_"+dbname+"_"+dbtable
 
-      val hdfspath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/tsv_"+alias + "_" +dbname + "_" + dbtable + "/partitioned_on_" + keys(i).toString()
-      val hdfspathTemp = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/tsv_"+alias + "_" +dbname + "_" + dbtable + "_tmp/partitioned_on_" + keys(i).toString()
+      //val hdfspath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/parquet1_"+alias + "_" +dbname + "_" + dbtable + "/partitioned_on_" + keys(i).toString()
+      //val hdfspathTemp = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/parquet1_"+alias + "_" +dbname + "_" + dbtable + "_tmp/partitioned_on_" + keys(i).toString()
+
+      val hdfspath = "hdfs://"+string("sinks.hdfs.url")+"/parquet1_"+alias + "_" +dbname + "_" + dbtable + "/partitioned_on_" + keys(i).toString()
+      val hdfspathTemp = "hdfs://"+string("sinks.hdfs.url")+"/parquet1_"+alias + "_" +dbname + "_" + dbtable + "_tmp/partitioned_on_" + keys(i).toString()
 
       val hconf = sc.hadoopConfiguration
 
-      hconf.set("fs.default.name", "hdfs://" + string("sinks.hdfs.url") + ":" + string("sinks.hdfs.port"))
-      hconf.set("fs.defaultFS", "hdfs://" + string("sinks.hdfs.url") + ":" + string("sinks.hdfs.port"))
+      hconf.set("fs.default.name", "hdfs://" + string("sinks.hdfs.url"))
+      hconf.set("fs.defaultFS", "hdfs://" + string("sinks.hdfs.url"))
 
       val hdfs = org.apache.hadoop.fs.FileSystem.get(hconf)
 
@@ -79,7 +83,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
       if(!parentPathExistsBefore){
         hdfs.mkdirs(new Path(parentHDFSPath))
         //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
-        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_"+(dataSource.host).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_parquet1_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
         debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         val hiveCreateTableStmt = hiveCon.createStatement()
         val createTableRes = hiveCreateTableStmt.execute(parentTableCreateQuery)
@@ -95,13 +99,13 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
       if (partitionExistsBefore) {
         debug("[MY DEBUG STATEMENTS] [HDFS] [DUMP] The path was present before == " + hdfspath)
-        //val partitionb4df = sqlContext.read.parquet(hdfspath).toDF((dataSource.fullTableSchema + ",partition").split(','): _*) //(dataSource.fullTableSchema)
-        val partitionb4df = sqlContext.read.format("com.databricks.spark.csv").option("inferSchema","true").option("delimiter","\t").load(hdfspath)
+        val partitionb4df = sqlContext.read.parquet(hdfspath).toDF((dataSource.fullTableSchema + ",partition").split(','): _*) //(dataSource.fullTableSchema)
+        //val partitionb4df = sqlContext.read.format("com.databricks.spark.csv").option("inferSchema","true").option("delimiter","\t").load(hdfspath)
 
-        val w = Window.partitionBy(col(dataSource.primarykey)).orderBy(col((dataSource.bookmark)).desc)
+        //val w = Window.partitionBy(col(dataSource.primarykey)).orderBy(col((dataSource.bookmark)).desc)
         val df_dedupe_ = df_.sort(col(dataSource.primarykey),col(dataSource.bookmark).desc).dropDuplicates(Seq(dataSource.primarykey))
 
-        val affectedPKs = df_dedupe_.select(dataSource.primarykey).rdd.map(r => r(0).asInstanceOf[String]).collect()
+        val affectedPKs = df_dedupe_.select(dataSource.primarykey).rdd.map(r => r(0).toString()).collect() //.asInstanceOf[String]).collect()
         val sc = SparkContext.getOrCreate(conf)
         val affectedPKsBrdcst = sc.broadcast(affectedPKs)
 
@@ -111,8 +115,8 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
         val persistPartitionAfterdf = prunedPartitionb4df.unionAll(df_dedupe_)
         //persistPartitionAfterdf.write.format("parquet").mode("overwrite").save(hdfspathTemp)
-        //persistPartitionAfterdf.write.format("parquet").mode("overwrite").save(hdfspathTemp)
-        persistPartitionAfterdf.write.format("com.databricks.spark.csv").option("delimiter","\t").save(hdfspathTemp)
+        persistPartitionAfterdf.write.format("parquet").mode("overwrite").save(hdfspathTemp)
+        //persistPartitionAfterdf.write.format("com.databricks.spark.csv").option("delimiter","\t").save(hdfspathTemp)
 
         hdfs.delete(new org.apache.hadoop.fs.Path(hdfspath),true)
         hdfs.rename(new org.apache.hadoop.fs.Path(hdfspathTemp),new org.apache.hadoop.fs.Path(hdfspath))
@@ -126,11 +130,11 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
         val w = Window.partitionBy(col(dataSource.primarykey)).orderBy(col((dataSource.bookmark)).desc)
         val df_dedupe_ = df_.sort(col(dataSource.primarykey),col(dataSource.bookmark).desc).dropDuplicates(Seq(dataSource.primarykey))
 
-        //df_dedupe_.write.format("parquet").mode("overwrite").save(hdfspath)
-        df_dedupe_.write.format("com.databricks.spark.csv").option("delimiter","\t").save(hdfspath)
+        df_dedupe_.write.format("parquet").mode("overwrite").save(hdfspath)
+        //df_dedupe_.write.format("com.databricks.spark.csv").option("delimiter","\t").save(hdfspath)
 
         //val partitionAddQuery = "ALTER TABLE hive_table_"+(dataSource.host).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
-        val partitionAddQuery = "ALTER TABLE hive_table_parquet_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
+        val partitionAddQuery = "ALTER TABLE hive_table_parquet1_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
         debug("[MY DEBUG STATEMENTS] [ALTER TABLES] [HIVE QUERY] == "+partitionAddQuery)
         val hiveAddPartitionStmt = hiveCon.createStatement()
         val addPartitionHiveRes = hiveAddPartitionStmt.execute(partitionAddQuery)

@@ -51,15 +51,15 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
 
       val dfSchema = df_.schema
 
-      val parentHDFSPath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/tsv_"+cluster+"_"+topic+"_"+alias
+      val parentHDFSPath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/parquet1_"+cluster+"_"+topic+"_"+alias
 
-      val hdfspath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/tsv_"+cluster + "_" +topic + "_" + alias + "/partitioned_on_" + keys(i).toString()
-      val hdfspathTemp = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/tsv_"+cluster + "_" +topic + "_" + alias + "_tmp/partitioned_on_" + keys(i).toString()
+      val hdfspath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/parquet1_"+cluster + "_" +topic + "_" + alias + "/partitioned_on_" + keys(i).toString()
+      val hdfspathTemp = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/parquet1_"+cluster + "_" +topic + "_" + alias + "_tmp/partitioned_on_" + keys(i).toString()
 
       val hconf = sc.hadoopConfiguration
 
-      hconf.set("fs.default.name", "hdfs://" + string("sinks.hdfs.url") + ":" + string("sinks.hdfs.port"))
-      hconf.set("fs.defaultFS", "hdfs://" + string("sinks.hdfs.url") + ":" + string("sinks.hdfs.port"))
+      hconf.set("fs.default.name", "hdfs://" + string("sinks.hdfs.url"))
+      hconf.set("fs.defaultFS", "hdfs://" + string("sinks.hdfs.url"))
 
       val hdfs = org.apache.hadoop.fs.FileSystem.get(hconf)
 
@@ -68,7 +68,7 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
       if(!parentPathExistsBefore){
         hdfs.mkdirs(new Path(parentHDFSPath))
         //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(kafkaSource.cluster).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.topic).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.alias).replaceAll("[^A-Za-z0-9]", "_")+" ("+kafkaSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+kafkaSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
-        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(kafkaSource.cluster).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.topic).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.alias).replaceAll("[^A-Za-z0-9]", "_")+" ("+kafkaSource.getColAndType(dfSchema)+") PARTITIONED BY (partitioned_on_"+kafkaSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_parquet1_"+(kafkaSource.cluster).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.topic).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.alias).replaceAll("[^A-Za-z0-9]", "_")+" ("+kafkaSource.getColAndType(dfSchema)+") PARTITIONED BY (partitioned_on_"+kafkaSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
 
         debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         val hiveCreateTableStmt = hiveCon.createStatement()
@@ -90,7 +90,7 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
         val w = Window.partitionBy(col(kafkaSource.primaryKey)).orderBy(col((kafkaSource.bookmark)).desc)
         val df_dedupe_ = df_.sort(col(kafkaSource.primaryKey),col(kafkaSource.bookmark).desc).dropDuplicates(Seq(kafkaSource.primaryKey))
 
-        val affectedPKs = df_dedupe_.select(kafkaSource.primaryKey).rdd.map(r => r(0).asInstanceOf[String]).collect()
+        val affectedPKs = df_dedupe_.select(kafkaSource.primaryKey).rdd.map(r => r(0).toString()).collect() //r(0).asInstanceOf[String]).collect()
         val sc = SparkContext.getOrCreate(conf)
         val affectedPKsBrdcst = sc.broadcast(affectedPKs)
 
@@ -109,7 +109,21 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
         affectedPKsBrdcst.unpersist()
         //affectedPKsBrdcst.destroy()
       }
+      else {
+        debug("[MY DEBUG STATEMENTS] [HDFS] [DUMP] The path was not present before == " + hdfspath)
+        //val w = Window.partitionBy(col(kafkaSource.primaryKey)).orderBy(col((kafkaSource.bookmark)).desc)
+        val df_dedupe_ = df_.sort(col(kafkaSource.primaryKey),col(kafkaSource.bookmark).desc).dropDuplicates(Seq(kafkaSource.primaryKey))
 
+        df_dedupe_.write.format("parquet").mode("overwrite").save(hdfspath)
+        //df_dedupe_.write.format("com.databricks.spark.csv").option("delimiter","\t").save(hdfspath)
+
+        //val partitionAddQuery = "ALTER TABLE hive_table_"+(dataSource.host).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
+        val partitionAddQuery = "ALTER TABLE hive_table_parquet1_"+(kafkaSource.cluster).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.topic).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.alias).replaceAll("[^A-Za-z0-9]", "_")+" ADD PARTITION (partitioned_on_"+(partKey_)+"='"+(key_)+"') location '"+hdfspath+"'"
+        debug("[MY DEBUG STATEMENTS] [ALTER TABLES] [HIVE QUERY] == "+partitionAddQuery)
+        val hiveAddPartitionStmt = hiveCon.createStatement()
+        val addPartitionHiveRes = hiveAddPartitionStmt.execute(partitionAddQuery)
+        //hiveContext.sql(partitionAddQuery)
+      }
     }
   }
 
@@ -125,13 +139,13 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
   }
 
   override def receive = {
+
     case KafkaMessage(listener, kafkaSource, hash) => {
+
       listener ! "[MY DEBUG STATEMENTS] [SINK RUNS] Starting to sink the following datasource == " + kafkaSource.toString()
 
       val hiveDriver = string("db.conn.hive.driver")
       Class.forName(hiveDriver)
-
-      val ssc = new StreamingContext(sc, Seconds(int("streaming.kafka.batchDuration")))
 
       val hiveCon = DriverManager.getConnection(string("db.conn.jdbc")+":"+string("db.conn.hive.version")+"://"+string("db.conn.hive.host")+":"+string("db.conn.hive.port")+"/"+string("db.conn.hive.defaultdb"))
       import scala.concurrent._
@@ -141,6 +155,8 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
 
       listener ! "throwing the datasource == " + kafkaSource.toString() + " to a future . . ."
 
+      val ssc = new StreamingContext(sc, Seconds(int("streaming.kafka.batchDuration")))
+
       val cluster = kafkaSource.cluster
       val topic = kafkaSource.topic
 
@@ -149,10 +165,10 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
       val future = Future {
         var kafkaParams = Map[String,String]()
         if(cluster == string("streaming.kafka.cluster.type.staging")) {
-          kafkaParams = Map[String, String]("metadata.broker.list" -> string("streaming.kafka.cluster.brokers.staging"))
+          kafkaParams = Map[String, String]("metadata.broker.list" -> "kafka01.staging.askmebazaar.com:9092,kafka02.staging.askmebazaar.com:9092,kafka03.staging.askmebazaar.com:9092") //string("streaming.kafka.cluster.brokers.staging"))
         }
         else{
-          kafkaParams = Map[String, String]("metadata.broker.list" -> string("streaming.kafka.cluster.brokers.production"))
+          kafkaParams = Map[String, String]("metadata.broker.list" -> "kafka01.production.askmebazaar.com:9092,kafka02.production.askmebazaar.com:9092,kafka03.production.askmebazaar.com:9092") //string("streaming.kafka.cluster.brokers.production"))
         }
         val streamingMessages: InputDStream[(String, String)] = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](
           ssc, kafkaParams, topicsSet)

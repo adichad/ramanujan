@@ -10,13 +10,10 @@ import sys
 import json
 import ast
 import time
-import django
 import sqlalchemy
 from sqlalchemy import *
 from sqlalchemy import func
 import collections
-from django.utils.encoding import smart_str, smart_unicode
-import logging
 import smtplib
 import sendgrid
 from datetime import *
@@ -24,7 +21,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import pickle
 import logging
-import csv
 from decimal import Decimal
 import requests
 
@@ -49,10 +45,10 @@ from datetime import datetime
 define("port",default=9999,help="serve on the given port",type=int)
 define("debug",default=False, help="running in the debug mode")
 
-internalhost = "localhost"
+internalhost = "analytics.c0wj8qdslqom.ap-southeast-1.rds.amazonaws.com"
 internaldbname = "Ramanujan"
 internalusername = "root"
-internalpassword = "1"
+internalpassword = "abcd1234"
 
 defaultDateTimeStr = "0001-01-01 00:00:00"
 defaultRunState = "idle"
@@ -68,9 +64,9 @@ db_port_map['5432'] = "postgres"
 db_port_map['1433'] = "mssql"
 
 def ss(str_):
-    return "'"+str_+"'"
+    return "'"+str_.replace("'","")+"'"
 
-def getUserSpecType(colname,request):
+def getUserSpecType(colname):
     # SELECT HIVE SPECIFIC TYPES ONLY e.g string integer etc etc # default STRING no mumbo jumbo
     return "none"
 
@@ -82,61 +78,61 @@ class BaseHandler(tornado.web.RequestHandler):
 class DefaultHandler(tornado.web.RequestHandler):
     def get(self):
         username = self.get_argument('username', 'Ramanujan')
-        userquery = "select username from Users;"
+        userquery = "select username from users;"
         db = MySQLdb.connect(internalhost,internalusername,internalpassword,internaldbname)
         cursor = db.cursor()
         cursor.execute(userquery)
         rt = cursor.fetchall()
         list_of_users_username = []
         for r in rt:
-        	user = str(r[0])
+            user = str(r[0])
             list_of_users_username.append(user)
         print "[DEBUG] username keyes in == "+str(username)
         if username not in list_of_users_username:
-        	retry_message = "the previous login credentials failed. Retry ?"
-        	self.render("login.html",message = retry_message)
+            retry_message = "the previous login credentials failed. Retry ?"
+            self.render("login.html",message = retry_message)
         else:
-	        cursor = db.cursor()
-    	    cursor.execute("SELECT host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes FROM Requests;")
-        	rt=cursor.fetchall()
-        	data = []
-        	for r in rt:
-            	data.append(r)
-        	if len(data) == 0:
-            	cols = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
-            	print "[MY DEBUG STATEMENTS] no record entry in the Requests . . ."
-            	df_to_show = pd.DataFrame([["N.A"] * len(cols)])
-            	df_to_show.columns = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
-            	health_message = "no records found ! "
-        	else:
-            	df=pd.DataFrame(data)
-            	df.columns = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
-            	df_to_show = df[["host","port","dbname","dbtable","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]]
-            	fault_rows = df_to_show[(df_to_show['failureRuns'] > 0)].shape[0]
-            	if fault_rows > 0:
-                	health_message = "something\'s wrong . . ."
-            	else:
-                	health_message = "things look good !"
+            cursor = db.cursor()
+            cursor.execute("SELECT host,port,dbname,dbtable,lastStarted,lastEnded,runFrequency,totalRuns,successRuns,failureRuns,currentState,exceptions,notes FROM Requests;")
+            rt=cursor.fetchall()
+            data = []
+            for r in rt:
+                data.append(r)
+            if len(data) == 0:
+                cols = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
+                print "[MY DEBUG STATEMENTS] no record entry in the Requests . . ."
+                df_to_show = pd.DataFrame([["N.A"] * len(cols)])
+                df_to_show.columns = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
+                health_message = "no records found ! "
+            else:
+                df=pd.DataFrame(data)
+                df.columns = ["host","port","dbname","dbtable","lastStarted","lastEnded","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]
+                df_to_show = df[["host","port","dbname","dbtable","runFrequency","totalRuns","successRuns","failureRuns","currentState","exceptions","notes"]]
+                fault_rows = df_to_show[(df_to_show['failureRuns'] > 0)].shape[0]
+                if fault_rows > 0:
+                    health_message = "something\'s wrong . . ."
+                else:
+                    health_message = "things look good !"
 
-        	cursor = db.cursor()
-        	cursor.execute("SELECT cluster,topic,alias,groupName,currentState,exceptions,notes FROM kafkaRequests;")
-        	rt=cursor.fetchall()
-        	data = []
-        	for r in rt:
-            	data.append(r)
-        	if len(data) == 0:
-            	cols = ["cluster","topic","alias","groupName","currentState","exceptions","notes"]
-            	print "[MY DEBUG STATEMENTS] no record entry in the Kafka Requests . . ."
-            	kafka_df_to_show = pd.DataFrame([["N.A"] * len(cols)])
-            	kafka_df_to_show.columns = ["cluster","topic","alias","groupName","currentState","exceptions","notes"]
-            	kafka_health_message = "no kafka records found ! "
-        	else:
-            	df=pd.DataFrame(data)
-            	df.columns = ["cluster","topic","alias","groupName","currentState","exceptions","notes"]
-            	kafka_df_to_show = df[["cluster","topic","alias","groupName","currentState","exceptions","notes"]]
-            	kafka_health_message = "various streams in parallel !"
-        	self.render("index.html",Ramanujan=username,message=health_message,records=df_to_show,mesage_kafka=kafka_health_message,records_kafka=kafka_df_to_show)
-        	print "[MY DEBUG STATEMENTS] server up and running . . ."
+            cursor = db.cursor()
+            cursor.execute("SELECT cluster,topic,alias,groupName,currentState,exceptions,notes FROM kafkaRequests;")
+            rt=cursor.fetchall()
+            data = []
+            for r in rt:
+                data.append(r)
+            if len(data) == 0:
+                cols = ["cluster","topic","alias","groupName","currentState","exceptions","notes"]
+                print "[MY DEBUG STATEMENTS] no record entry in the Kafka Requests . . ."
+                kafka_df_to_show = pd.DataFrame([["N.A"] * len(cols)])
+                kafka_df_to_show.columns = ["cluster","topic","alias","groupName","currentState","exceptions","notes"]
+                kafka_health_message = "no kafka records found ! "
+            else:
+                df=pd.DataFrame(data)
+                df.columns = ["cluster","topic","alias","groupName","currentState","exceptions","notes"]
+                kafka_df_to_show = df[["cluster","topic","alias","groupName","currentState","exceptions","notes"]]
+                kafka_health_message = "various streams in parallel !"
+            self.render("index.html",Ramanujan=username,message=health_message,records=df_to_show,mesage_kafka=kafka_health_message,records_kafka=kafka_df_to_show)
+            print "[MY DEBUG STATEMENTS] server up and running . . ."
 
 
 class PostRequestHandlerRDBMS(tornado.web.RequestHandler):
@@ -220,7 +216,7 @@ class PostRequestHandlerRDBMS(tornado.web.RequestHandler):
                 internalcursor.execute("INSERT INTO VarTypeRecordsTable (tablename, colname, coltype, usertype) VALUES ("+','.join([ss(qualified_db_table_name),ss(colname),ss(coltype),ss(usertype)])+");")
                 internaldb.commit()
             except:
-                print "[DEBUG] some exception while inserting in VarTypeRecordsTable . . ."
+                print "[DEBUG] some exception while inserting in VarTypeRecordsTable . . . for colname == "+str(colname)+" for coltype == "+str(coltype)
                 internaldb.rollback()
                 traceback.print_exc()
             print "[DEBUG] inserted the colname == "+colname+" with column type == "+coltype+ " and user type == "+usertype
@@ -308,7 +304,7 @@ class PostRequestHandlerKAFKA(tornado.web.RequestHandler):
         qualified_kafka_topic_name = cluster+"_"+topic+"_"+alias
         for c in range(0,len(kafkaColNames)):
             try:
-                kafkaColName = kafkaColNames[c]
+                kafkaColname = kafkaColNames[c]
                 kafkaUsertype = kafkaColTypes[c]
                 internalcursor.execute("INSERT INTO kafkaVarTypeRecordsTable (topicname, kafkaColname, kafkaUsertype) VALUES ("+','.join([ss(qualified_kafka_topic_name),ss(kafkaColname),ss(kafkaUsertype)])+");")
                 internaldb.commit()
@@ -316,7 +312,7 @@ class PostRequestHandlerKAFKA(tornado.web.RequestHandler):
                 print "[DEBUG] some exception while inserting in kafkaVarTypeRecordsTable . . ."
                 internaldb.rollback()
                 traceback.print_exc()
-            print "[DEBUG] inserted the kafkacolname == "+kafkaColName+" with user type == "+kafkaUsertype
+            print "[DEBUG] inserted the kafkacolname == "+kafkaColname+" with user type == "+kafkaUsertype
         print "[DEBUG] kafka column insertions are all over . . ."
 
         requestStr = json.dumps(request)
@@ -360,7 +356,7 @@ class LoginHandler(BaseHandler):
         #request = tornado.escape.json_decode(self.request.body)
         getusername = self.get_argument('username')
         getpassword = self.get_argument('password')
-        userquery = "select username,password from Users;"
+        userquery = "select username,password from users;"
         internaldb = MySQLdb.connect(internalhost,internalusername,internalpassword,internaldbname)
         cursor = internaldb.cursor()
         cursor.execute(userquery)

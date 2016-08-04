@@ -1,0 +1,11 @@
+colored-traceback==0.2.0
+csvkit==0.9.1
+parsedatetime==2.0
+collections-extended==0.7.0
+sendgrid==2.2.1
+pickleshare==0.7.2
+tornado==4.3
+logging==0.4.9.6
+requests==2.10.0
+pandas==0.18.1
+MySQL-python==1.2.5

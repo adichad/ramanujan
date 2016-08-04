@@ -88,7 +88,7 @@ configurations {
 }
 
 dependencies {
-  compile group: 'com.databricks', name: 'spark-csv_2.10', version: '1.1.0'
+  compile group: 'com.databricks', name: 'spark-csv_2.11', version: '1.1.0'
   compile     group: 'org.apache.hive',            name: 'hive-jdbc',                                         version: '1.2.1'
   compile     group: 'mysql',                      name: 'mysql-connector-java',                              version: '5.1.6'
   compile     group: 'org.scala-lang',             name: "scala-library",                                     version: scala_version
@@ -146,7 +146,7 @@ dependencies {
 
   compile     group: 'org.postgresql',             name: 'postgresql',                                        version: '9.4-1202-jdbc42'
 
-  compile     group: 'org.apache.spark',           name: "spark-hive_2.10",                                   version: spark_version
+  compile     group: 'org.apache.spark',           name: "spark-hive_2.11",                                   version: spark_version
   compile     group: 'org.apache.spark',           name: "spark-core_${scala_base_version}",                  version: spark_version
   compile     group: 'org.apache.spark',           name: "spark-sql_${scala_base_version}",                   version: spark_version
   compile     group: 'org.apache.spark',           name: "spark-streaming_${scala_base_version}",             version: spark_version

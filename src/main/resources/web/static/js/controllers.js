@@ -19,7 +19,7 @@ var ramanujanDBCtrl = function($scope,$http) {
       console.log(data)
       /* post to server*/
       console.log("[DEBUG] [REQUEST] posting the data to api request url . . .")
-      $http.post('http://127.0.0.1:9999/api/request/rdbms', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random())}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
+      $http.post('/api/request/rdbms', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random())}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
       console.log("[DEBUG] [REQUEST] posted !")
   }
 }
@@ -33,7 +33,7 @@ var ramanujanLoginCtrl = function($scope,$http,$location) {
       console.log(data)
       /* post to server*/
       console.log("[DEBUG] [REQUEST] posting the data to api request url . . .")
-      $http.post('http://127.0.0.1:9999/login', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random());$location.path('/Ramanujan');}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
+      $http.post('/login', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random());$location.path('/Ramanujan');}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
       console.log("[DEBUG] [REQUEST] [LOGIN] posted !")
   }
 }
@@ -58,7 +58,7 @@ var ramanujanKafkaCtrl = function($scope,$http) {
       console.log(data)
       /* post to server*/
       console.log("[DEBUG] [REQUEST] posting the data to api request url . . .")
-      $http.post('http://127.0.0.1:9999/api/request/kafka', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random())}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
+      $http.post('/api/request/kafka', data).success(function() {console.log("[DEBUG] [REQUEST] great success ! "+Math.random())}).error(function(){console.log("[DEBUG] [REQUEST] uh ho! "+(1+Math.random()))});        
       console.log("[DEBUG] [REQUEST] posted !")
   }
 }
@@ -89,7 +89,7 @@ var reportCtrl = function($scope,$http) {
 		console.log(script)
 		/* post to server */
 		console.log("[MY DEBUG STATEMENTS] [REPORT] posting the data to api request url . . .")
-		$http.post('http:/127.0.0.1:9999/api/report',script).then(function() {console.log("[MY DEBUG STATEMENTS] [REPORT] great success on report submission ! "+Math.random())},function(){console.log("[MY DEBUG STATEMENTS] [REPORT] uh ho for report submission ! "+(1+Math.random()))});
+		$http.post('/api/report',script).then(function() {console.log("[MY DEBUG STATEMENTS] [REPORT] great success on report submission ! "+Math.random())},function(){console.log("[MY DEBUG STATEMENTS] [REPORT] uh ho for report submission ! "+(1+Math.random()))});
 		console.log("[MY DEBUG STATEMENTS] [REPORT] posted !")
 	}
 }
