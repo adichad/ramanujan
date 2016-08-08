@@ -68,7 +68,7 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
       if(!parentPathExistsBefore){
         hdfs.mkdirs(new Path(parentHDFSPath))
         //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(kafkaSource.cluster).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.topic).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.alias).replaceAll("[^A-Za-z0-9]", "_")+" ("+kafkaSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+kafkaSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
-        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_parquet1_"+(kafkaSource.cluster).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.topic).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.alias).replaceAll("[^A-Za-z0-9]", "_")+" ("+kafkaSource.getColAndType(dfSchema)+") PARTITIONED BY (partitioned_on_"+kafkaSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        val parentTableCreateQuery = "CREATE EXTERNAL TABLE IF NOT EXISTS hive_table_parquet1_"+(kafkaSource.cluster).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.topic).replaceAll("[^A-Za-z0-9]", "_")+"_"+(kafkaSource.alias).replaceAll("[^A-Za-z0-9]", "_")+" ("+kafkaSource.getColAndType(dfSchema)+") PARTITIONED BY (partitioned_on_"+kafkaSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
 
         debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         val hiveCreateTableStmt = hiveCon.createStatement()
@@ -147,7 +147,7 @@ class KafkaWorkerActor(val config: Config) extends Actor with Configurable with 
       val hiveDriver = string("db.conn.hive.driver")
       Class.forName(hiveDriver)
 
-      val hiveCon = DriverManager.getConnection(string("db.conn.jdbc")+":"+string("db.conn.hive.version")+"://"+string("db.conn.hive.host")+":"+string("db.conn.hive.port")+"/"+string("db.conn.hive.defaultdb"))
+      val hiveCon = DriverManager.getConnection(string("db.conn.jdbc")+":"+string("db.conn.hive.version")+"://"+string("db.conn.hive.host")+":"+string("db.conn.hive.port")+"/"+string("db.conn.hive.defaultdb"),"APP","abc123")
       import scala.concurrent._
       val numberOfCPUs = sys.runtime.availableProcessors()
       val threadPool = Executors.newFixedThreadPool(numberOfCPUs)

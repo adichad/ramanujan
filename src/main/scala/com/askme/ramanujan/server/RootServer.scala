@@ -58,8 +58,6 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 	val internalURL: String = string("db.conn.jdbc")+":"+string("db.conn.use")+"://"+internalHost+":"+internalPort+"/"+internalDB+"?zeroDateTimeBehavior=convertToNull" // the internal connection DB <status, bookmark, requests> etc
 
-	var connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
-
 	def transform(request: String) = {
 		val request_ = request.replaceAll("'","\"") // not needed anymore
 		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String,treatment: String)
@@ -151,14 +149,14 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 	def startASpin(host: String,port: String,dbname: String,dbtable: String,currentDateStr: String,runStartMessage: String,request: String) = {
 		val hash = randomString(10)
+		val connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 		val insertRecRunningLOGS = "INSERT INTO `"+string("db.internal.tables.runninglogs.name")+"` (`"+string("db.internal.tables.runninglogs.cols.host")+"`,`"+string("db.internal.tables.runninglogs.cols.port")+"`,`"+string("db.internal.tables.runninglogs.cols.dbname")+"`,`"+string("db.internal.tables.runninglogs.cols.dbtable")+"`,`"+string("db.internal.tables.runninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.runninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+host+"','"+port+"','"+dbname+"','"+dbtable+"','"+currentDateStr+"','"+hash+"','none','"+runStartMessage+"')"
 		val insertRecRunningStatement = connection.createStatement()
 		insertRecRunningStatement.executeUpdate(insertRecRunningLOGS)
-		Thread sleep 1000
 		val updateRequestsRunningQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbname+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+dbtable+"\""
 		val updateRequestsRunningstatement = connection.createStatement()
 		updateRequestsRunningstatement.executeUpdate(updateRequestsRunningQuery)
-
+		connection.close()
 		val dataSource = transform(request)
 
 		val workerActor = pipelineSystem.actorOf(Props(classOf[WorkerActor],config))
@@ -169,6 +167,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 	def startAStream(cluster: String, topic: String, alias: String, groupName: String, currentDateStr: String, runStreamingMessage: String, request: String): Unit = {
 		val hash = randomString(10)
+		val connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 		val insertkafkaRecRunningLOGS = "INSERT INTO `"+string("db.internal.tables.kafkaRunninglogs.name")+"` (`"+string("db.internal.tables.kafkaRunninglogs.cols.cluster")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.topic")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.alias")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.groupName")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.runTimeStamp")+"`,`"+string("db.internal.tables.kafkaRunninglogs.cols.hash")+"`,`"+string("db.internal.tables.runninglogs.cols.exceptions")+"`,`"+string("db.internal.tables.runninglogs.cols.notes")+"`) VALUES( '"+cluster+"','"+topic+"','"+alias+"','"+groupName+"','"+currentDateStr+"','"+hash+"','none','"+runStreamingMessage+"')"
 		val insertkafkaRecRunningStatement = connection.createStatement()
 		insertkafkaRecRunningStatement.executeUpdate(insertkafkaRecRunningLOGS)
@@ -183,6 +182,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		kafkaWorkerActor ! new KafkaMessage(listener,kafkaSource,hash)
 		//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
 		//druidActor ! new DruidMessage(listener,dataSource,hash)
+		connection.close()
 	}
 	/* commenting kafka streaming - the approach needs to be changed
 	val kafkaStatement = connection.createStatement()
@@ -213,6 +213,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 	*/
 
 	while(true) {
+		val connection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 		val statement = connection.createStatement()
 
 		val getAllRequestsQuery = "SELECT * FROM "+string("db.internal.tables.requests.name")
@@ -273,6 +274,8 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 							startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 						}
 						else{
+							val runStartMessage = "starting the Next Run before next scheduled time | previous NOT OK . . ."
+							startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 						}
 					}
 				}
@@ -293,9 +296,8 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 				}
 			}
 		}
-		Thread sleep 600000 // avoiding gc overhead.
+		connection.close()
 	}
-	connection.close()
 
 	class CustomSparkListener extends SparkListener {
 		override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd) {

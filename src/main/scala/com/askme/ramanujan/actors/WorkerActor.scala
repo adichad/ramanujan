@@ -1,6 +1,6 @@
 package com.askme.ramanujan.actors
 
-import java.sql.{Connection, DriverManager}
+import java.sql.DriverManager
 import java.util.Properties
 import java.util.concurrent.Executors
 
@@ -53,13 +53,17 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
     }
   }
 
-  def makePartitionsManageHive(keys: Array[Any],byPartitionArray: Array[DataFrame],alias: String, dbname: String, dbtable: String, dataSource: DataSource,hiveCon: Connection) = {
+  def makePartitionsManageHive(keys: Array[Any],byPartitionArray: Array[DataFrame],alias: String, dbname: String, dbtable: String, dataSource: DataSource) = {
+    val hiveCon = DriverManager.getConnection(string("db.conn.jdbc")+":"+string("db.conn.hive.version")+"://"+string("db.conn.hive.host")+":"+string("db.conn.hive.port")+"/"+string("db.conn.hive.defaultdb"))
+
     for (i <- 0 to (keys.length - 1)) {
       debug("[MY DEBUG TEMP] " +keys(i).toString())
       val partKey_ = keys(i).toString().split("=")(0)
       val key_ = keys(i).toString().split("=")(1)
 
       val df_ = byPartitionArray(i)
+
+      val dfSchema = df_.schema
       //val hiveContext = new org.apache.spark.sql.hive.HiveContext(sc)
 
       //val parentHDFSPath = "hdfs://"+string("sinks.hdfs.url")+":"+string("sinks.hdfs.port")+"/parquet1_"+alias+"_"+dbname+"_"+dbtable
@@ -83,7 +87,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
       if(!parentPathExistsBefore){
         hdfs.mkdirs(new Path(parentHDFSPath))
         //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
-        val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_parquet1_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        val parentTableCreateQuery = "CREATE EXTERNAL TABLE IF NOT EXISTS hive_table_parquet1_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType(dfSchema)+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
         debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         val hiveCreateTableStmt = hiveCon.createStatement()
         val createTableRes = hiveCreateTableStmt.execute(parentTableCreateQuery)
@@ -141,10 +145,13 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
         //hiveContext.sql(partitionAddQuery)
       }
     }
+    hiveCon.close()
   }
 
-  def sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource: DataSource, hiveCon: Connection) = {
+  def sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource: DataSource) = {
     import sqlContext.implicits._
+    val hiveCon = DriverManager.getConnection(string("db.conn.jdbc")+":"+string("db.conn.hive.version")+"://"+string("db.conn.hive.host")+":"+string("db.conn.hive.port")+"/"+string("db.conn.hive.defaultdb"))
+
     val keys: Array[Any] = PKsAffectedDF_partition.select("partition").distinct.collect.flatMap(_.toSeq)
     val byPartitionArray: Array[DataFrame] = keys.map(key => PKsAffectedDF_partition.where($"partition" <=> key))
     val dbname = dataSource.db
@@ -154,8 +161,8 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
     val PKsAffectedDF_json = PKsAffectedDF_partition.toJSON
 
     //sinkToKaphka(PKsAffectedDF_json,dbname,dbtable) // might toggle kafka push on and off.
-
-    makePartitionsManageHive(keys,byPartitionArray,alias,dbname, dbtable, dataSource,hiveCon)
+    hiveCon.close()
+    makePartitionsManageHive(keys,byPartitionArray,alias,dbname, dbtable, dataSource)
   }
 
   override def receive = {
@@ -166,8 +173,6 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
       val hiveDriver = string("db.conn.hive.driver")
       Class.forName(hiveDriver)
-
-      val hiveCon = DriverManager.getConnection(string("db.conn.jdbc")+":"+string("db.conn.hive.version")+"://"+string("db.conn.hive.host")+":"+string("db.conn.hive.port")+"/"+string("db.conn.hive.defaultdb"))
 
       import scala.concurrent._
       val numberOfCPUs = sys.runtime.availableProcessors()
@@ -211,7 +216,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
               })
               val PKsAffectedDF_partition = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.bookmark), lit(partitionCol)))
 
-              sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource, hiveCon)
+              sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource)
 
               dataSource.insertInRunLogsPassed(hash)
               dataSource.updateInRequestsPassed(hash)
@@ -232,7 +237,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
               })
               val PKsAffectedDF_partition: DataFrame = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.hdfsPartitionCol), lit(partitionCol)))
 
-              sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource, hiveCon)
+              sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource)
               "[MY DEBUG STATEMENTS] run completed."
             }
           }

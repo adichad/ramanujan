@@ -8,12 +8,37 @@ import com.askme.ramanujan.Configurable
 import com.typesafe.config.Config
 import grizzled.slf4j.Logging
 import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DoubleType, StringType, StructField, StructType}
 import org.apache.spark.sql._
 import org.apache.spark.{SparkConf, SparkContext}
 import org.json4s.NoTypeHints
 import org.json4s.jackson.Serialization
 import org.apache.spark.sql.functions._
+
+/*
+SQL data types :
+CHARACTER [(length)] or CHAR [(length)]
+VARCHAR (length)
+BOOLEAN
+SMALLINT
+INTEGER or INT
+DECIMAL [(p[,s])] or DEC [(p[,s])]
+NUMERIC [(p[,s])]
+REAL
+FLOAT(p)
+DOUBLE PRECISION
+DATE
+TIME
+TIMESTAMP
+CLOB [(length)] or CHARACTER LARGE OBJECT [(length)] or CHAR LARGE OBJECT [(length)]
+BLOB [(length)] or BINARY LARGE OBJECT [(length)]
+
+Parquet supported data types :
+	BOOLEAN, INT32, INT64, INT96, FLOAT, DOUBLE, BYTE_ARRAY
+
+Spark data types :
+	BinaryType, BooleanType, ByteType, 	DateType, DoubleType, 	FloatType, 	IntegerType, LongType, 	NullType, 	ShortType, 	StringType, 	TimestampType
+ */
 
 class DataSource(val config: Config,val conntype: String, val host: String, val alias: String,
 								 val port: String, val user: String, val password: String, val db: String, val table: String,
@@ -24,15 +49,15 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 	def sqlToHiveDataTypeMapping(coltype: String): String = {
 		//HIVE -> INT, BIGINT , FLOAT , DOUBLE , DECIMAL , TIMESTAMP , DATE , STRING , VARCHAR , CHAR , BOOLEAN
 		//SQL -> int,varchar,binary,timestamp,date,time,datetime,float,int
-		val typeConversionsSQLtoHIVEMap = Map("NUMERIC" -> "DOUBLE","DECIMAL" -> "DOUBLE","VARBINARY"->"STRING","BINARY" -> "STRING","CHARACTER" -> "STRING","tinyint(1)" -> "BOOLEAN", "int" -> "BIGINT", "binary" -> "BOOLEAN", "varchar" -> "STRING", "date" -> "DATE", "time" -> "TIMESTAMP", "float" -> "FLOAT")
+		val typeConversionsSQLtoHIVEMap = Map("numeric" -> "DOUBLE","decimal" -> "DOUBLE","varbinary"->"STRING","binary" -> "STRING","character" -> "STRING","tinyint(1)" -> "BOOLEAN", "int" -> "INT", "binary" -> "BOOLEAN", "varchar" -> "STRING", "date" -> "STRING", "time" -> "STRING", "float" -> "FLOAT")
 		var hiveType = "STRING"
 		typeConversionsSQLtoHIVEMap.keys.foreach {
-			k => if(coltype.toLowerCase().contains(k)) { hiveType = typeConversionsSQLtoHIVEMap(k) }
+			k => if(coltype.toLowerCase().contains(k.toLowerCase())) { hiveType = typeConversionsSQLtoHIVEMap(k) }
 		}
 		debug("[MY DEBUG STATEMENTS] [SQL TO HIVE DATA TYPE MAPPINGS] generating coltype == "+coltype+" #as#  "+hiveType)
 		hiveType
 	}
-
+	/*
 	def appendType(colname : String, coltype: String, userTypeColsMap: Map[String, String]):String = {
 		if(userTypeColsMap.contains(colname)){
 			debug("[MY DEBUG STATEMENTS] [HIVE TABLE SCHEMA GENERATION] returning == "+colname+" "+userTypeColsMap(colname))
@@ -43,6 +68,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			colname+" "+sqlToHiveDataTypeMapping(coltype)
 		}
 	}
+	*/
 
 	// skip  / report / fail
 	val longToDouble = udf((col: String, treatment: String) => {
@@ -335,6 +361,19 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 
 	def convertTargetTypes(PKsAffectedDFSource: DataFrame): DataFrame = {
 		var df = PKsAffectedDFSource
+		val dfSchema: StructType = PKsAffectedDFSource.schema
+		val dfColLen = dfSchema.length
+
+		for(i <- 0 until dfColLen){
+			val schema: StructField = dfSchema(i)
+			val varname: String = schema.name.toString
+			val vartype: String = schema.dataType.toString
+			if(vartype.toLowerCase.contains("decimaltype")){
+				debug("[MY DEBUG STATEMENTS] SCHEMA ISSUES ### conversions -- decimaltype to doubletype . . . == "+varname+" for df === "+alias+"_"+db+"_"+table)
+				df = df.withColumn(varname,df(varname).cast(DoubleType))
+			}
+			debug("[MY DEBUG STATEMENTS] SCHEMA ISSUES ### source == "+alias+"_"+db+"_"+table+" =and= varname == "+varname+" =and= vartype == "+vartype)
+		}
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
 		val statement = internalConnection.createStatement()
 		val qualifiedTableName = alias+"_"+db+"_"+table
@@ -344,6 +383,7 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val colname = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.colname"))
 			val coltype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.coltype"))
 			val usertype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.usertype"))
+			debug("[MY DEBUG STATEMENTS] SCHEMA ISSUES ### source == "+alias+"_"+db+"_"+table+" =and= colname == "+colname+" =and= coltype == "+coltype+" =and= usertype == "+usertype)
 			if(!(usertype.toLowerCase() == string("sinks.hdfs.nullUserType"))){ // long if-else. must avoid it.
 				if(usertype.toLowerCase() == "bigint")
 				{
@@ -395,13 +435,49 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				}
 			}
 		}
+		val dfSchemaAfter: StructType =df.schema
+		val dfColLenAfter = dfSchema.length
+
+		for(i <- 0 until dfColLen){
+			val schema: StructField = dfSchema(i)
+			val varname: String = schema.name.toString
+			val vartype: String = schema.dataType.toString
+			debug("[MY DEBUG STATEMENTS] SCHEMA ISSUES AFTER ### source == "+alias+"_"+db+"_"+table+" =and= varname == "+varname+" =and= vartype == "+vartype)
+		}
+		internalConnection.close()
 		df
 	}
 
-	def  	getColAndType(): String = {
+	def sparkToHiveDataTypeMapping(vartype: String): String = {
+		if(vartype.toLowerCase().contains("decimaltype")){
+			"Double"
+		}
+		else {
+			val typeConversionsSparktoHIVEMap = Map("BinaryType" -> "BINARY", "BooleanType" -> "BOOLEAN", "ByteType" -> "STRING", "DateType" -> "DATE", "DoubleType" -> "DOUBLE", "FloatType" -> "FLOAT", "IntegerType" -> "INT", "LongType" -> "BIGINT", "NullType" -> "STRING", "ShortType" -> "INT", "StringType" -> "STRING", "TimestampType" -> "TIMESTAMP")
+			typeConversionsSparktoHIVEMap.getOrElse(vartype, "STRING")
+		}
+	}
+
+	def appendTypeUser(colname: String, usertype: String): String = {
+		colname+" "+usertype
+	}
+	def appendTypeSchema(colname: String,map: Map[String,String]): String = {
+		colname+" "+map.getOrElse(colname,"String")
+	}
+
+	def  	getColAndType(dfSchema: StructType): String = {
 		val columns = fullTableSchema.split(",")
 
-		var userTypeColsMap : Map[String,String] = Map()
+		var sparkSchemaColsMap : Map[String,String] = Map()
+		val dfColLen = dfSchema.length
+
+		for(i <- 0 until dfColLen){
+			val schema = dfSchema(i)
+			val varname = schema.name.toString
+			val vartype = schema.dataType.toString
+			sparkSchemaColsMap += (varname -> sparkToHiveDataTypeMapping(vartype))
+		}
+
 		var hiveTableschema = scala.collection.mutable.MutableList[String]()
 
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword)
@@ -414,9 +490,11 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			val coltype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.coltype"))
 			val usertype = resultSet.getString(string("db.internal.tables.varTypeRecordsTable.cols.usertype"))
 			if(!(usertype.toLowerCase() == string("sinks.hdfs.nullUserType"))){
-				userTypeColsMap += ( colname -> usertype )
+				hiveTableschema += appendTypeUser(colname,usertype)
 			}
-			hiveTableschema += appendType(colname,coltype,userTypeColsMap)
+			else {
+				hiveTableschema += appendTypeSchema(colname,sparkSchemaColsMap)
+			}
 		}
 		internalConnection.close()
 		//val typecastedColumns = columns.map(appendType(_,coltype,userTypeColsMap)).mkString(" , ")
@@ -557,10 +635,12 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous bookmark] this db_table  has a row . . . == "+toString())
 				val bookmark = resultSet.getString(string("db.internal.tables.bookmarks.cols.bookmarkId"))
 				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous bookmark] the previous bookmark returned == "+bookmark)
+				internalConnection.close()
 				bookmark
 			}
 			else {
 				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
+				internalConnection.close()
 				if(bookmarkformat.toLowerCase() == string("db.internal.tables.bookmarks.defs.defaultDateFormat").toLowerCase){
 					string("db.internal.tables.bookmarks.defs.defaultDateBookMarkValue")
 				}
@@ -570,7 +650,8 @@ class DataSource(val config: Config,val conntype: String, val host: String, val 
 			}
 		}
 		else {
-			debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NOTNULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
+			internalConnection.close()
+			debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NOTNULL] the default one . . . == " + string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
 			string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
 		}
 	}

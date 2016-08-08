@@ -17,6 +17,7 @@ class KafkaSource(val config: Config, val cluster: String, val topic: String, va
 
   def sparkToHiveDataTypeMapping(vartype: String): Any = {
     val typeConversionsSparktoHIVEMap = Map("BinaryType" -> "BINARY", "BooleanType" -> "BOOLEAN", "ByteType" -> "STRING", "DateType" -> "DATE", "DoubleType" -> "DOUBLE", "FloatType" -> "FLOAT", "IntegerType" -> "INT", "LongType" -> "BIGINT", "NullType" -> "STRING", "ShortType" -> "INT", "StringType" -> "STRING", "TimestampType" -> "TIMESTAMP")
+    typeConversionsSparktoHIVEMap.get(vartype)
   }
 
   def appendType(varname: String, vartype: String): String = {
