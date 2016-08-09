@@ -1,5 +1,6 @@
 package com.askme.ramanujan.actors
 
+import java.security.MessageDigest
 import java.sql.DriverManager
 import java.util.Properties
 import java.util.concurrent.Executors
@@ -165,6 +166,19 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
     makePartitionsManageHive(keys,byPartitionArray,alias,dbname, dbtable, dataSource)
   }
 
+  def bytes2Int(bytes: Array[Byte]): Int = {
+    var value = 0;
+    for (i <- 0 until bytes.length)
+    {
+      value = (value << 8) + (bytes(i) & 0xff)
+    }
+    value
+  }
+
+  def md5Hash(s: String): Int = {
+    bytes2Int(MessageDigest.getInstance("MD5").digest(s.getBytes))
+  }
+
   override def receive = {
 
     case TableMessage(listener, dataSource, hash) => {
@@ -201,6 +215,19 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
           }
           else {
             val PKsAffectedDF = dataSource.convertTargetTypes(PKsAffectedDFSource)
+
+            val partitionCol = dataSource.primarykey
+            val numOfPartitions = dataSource.numOfPartitions
+            val partitionColFunc = udf((pk: String,numOfPartitions: Int) => {
+              try {
+                "partition="+ ((md5Hash(pk) % numOfPartitions) + 1)
+              }
+              catch{
+                case _ : Throwable => {
+                  "partition=1"
+                }
+              }
+            })
 
             if (dataSource.hdfsPartitionCol.isEmpty() || dataSource.hdfsPartitionCol == dataSource.bookmark) {
               debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} picking up the default partition column == " + dataSource.bookmark)
