@@ -60,7 +60,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 	def transform(request: String) = {
 		val request_ = request.replaceAll("'","\"") // not needed anymore
-		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,partitionCol: String,druidMetrics: String,druidDims: String,runFrequency: String,treatment: String)
+		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,numOfPartitions: String,druidMetrics: String,druidDims: String,runFrequency: String,treatment: String)
 
 		object RequestJsonProtocol extends DefaultJsonProtocol {
 			implicit val RequestFormat = jsonFormat17(RequestObject)
@@ -84,13 +84,13 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		val primaryKey = requestObject.primaryKey // primaryKey
 		val conntype = requestObject.conntype // e.g com.sql.MySQL.driver
 		val fullTableSchema = requestObject.fullTableSchema // fully qualified table schema
-		val hdfsPartitionCol = requestObject.partitionCol
+		val numOfPartitions = requestObject.numOfPartitions
 		val druidMetrics = requestObject.druidMetrics
 		val druidDims = requestObject.druidDims
 		val runFrequency = requestObject.runFrequency
 		val treatment = requestObject.treatment
 
-		val dataSource = new DataSource(config,conntype,host,alias,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,hdfsPartitionCol,druidMetrics,druidDims,runFrequency,treatment)
+		val dataSource = new DataSource(config,conntype,host,alias,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,numOfPartitions,druidMetrics,druidDims,runFrequency,treatment)
 		dataSource
 	}
 
@@ -132,16 +132,16 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 			freqScalar.toInt
 		}
 		else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.hour"))){
-			freqScalar.toInt * 60 // ok if hardcoded
+			freqScalar.toInt * int("db.internal.tables.requests.defs.hourToMin") // ok if hardcoded
 		}
 		else if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.day"))){
-			freqScalar.toInt * 1440 // ok if hardcoded
+			freqScalar.toInt * int("db.internal.tables.requests.defs.dayToMin") // ok if hardcoded
 		}
 		else  if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.week"))){
-			freqScalar.toInt * 10080 // ok if hardcoded
+			freqScalar.toInt * int("db.internal.tables.requests.defs.weekToMin") // ok if hardcoded
 		}
 		else {
-			freqScalar.toInt * 25200 * 4
+			freqScalar.toInt * int("db.internal.tables.requests.defs.monthToMin")
 		}
 	}
 
@@ -154,8 +154,8 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		val insertRecRunningStatement = connection.createStatement()
 		insertRecRunningStatement.executeUpdate(insertRecRunningLOGS)
 		val updateRequestsRunningQuery = "UPDATE "+string("db.internal.tables.requests.name")+" SET "+string("db.internal.tables.requests.cols.lastStarted")+" = \""+currentDateStr+"\" , "+string("db.internal.tables.requests.cols.totalRuns")+" = "+string("db.internal.tables.requests.cols.totalRuns")+" + 1 , "+string("db.internal.tables.requests.cols.currentState")+" = \""+string("db.internal.tables.requests.defs.defaultRunningState")+"\" where "+string("db.internal.tables.requests.cols.host")+" = \""+host+"\" and "+string("db.internal.tables.requests.cols.port")+" = \""+port+"\" and "+string("db.internal.tables.requests.cols.dbname")+" = \""+dbname+"\" and "+string("db.internal.tables.requests.cols.dbtable")+" = \""+dbtable+"\""
-		val updateRequestsRunningstatement = connection.createStatement()
-		updateRequestsRunningstatement.executeUpdate(updateRequestsRunningQuery)
+		val updateRequestsRunningStatement = connection.createStatement()
+		updateRequestsRunningStatement.executeUpdate(updateRequestsRunningQuery)
 		connection.close()
 		val dataSource = transform(request)
 
@@ -221,7 +221,6 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 		while(resultSet.next()){
 			// metadata
-			val processDate = resultSet.getString(string("db.internal.tables.requests.cols.processDate"))
 			val request = resultSet.getString(string("db.internal.tables.requests.cols.request"))
 			val host = resultSet.getString(string("db.internal.tables.requests.cols.host"))
 			val port = resultSet.getString(string("db.internal.tables.requests.cols.port"))
@@ -238,9 +237,6 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 			val exceptions = resultSet.getString(string("db.internal.tables.requests.cols.exceptions"))
 			val notes = resultSet.getString(string("db.internal.tables.requests.cols.notes"))
 
-			//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] current dataSource == "+request.toString())
-
-			// val format = new SimpleDateFormat"%Y-%m-%d %H:%M:%S")
 			val format = new java.text.SimpleDateFormat(string("db.internal.tables.requests.defs.defaultDateFormat"))
 			val lastStartedDate = format.parse(lastStarted)
 			val lastEndedDate = format.parse(lastEnded)
@@ -258,25 +254,28 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 					if(currentState == string("db.internal.tables.requests.defs.defaultRunningState")){
 					}
 					else{
-						//debug("[MY DEBUG STATEMENTS] [REQUESTS] [WHILE 1] [ALERT] encountered some exception in last run == "+exceptions+" for dataSource == "+request)
-						//debug("[MY DEBUG STATEMENTS] ##re-running , ##re-trying . . .$ db == "+dbname+" @and@ $ table == "+dbtable)
-
 						val diffInMinsCurrentStarted = TimeUnit.MINUTES.convert(currentDateDate.getTime() - lastStartedDate.getTime(),TimeUnit.MILLISECONDS)
+						var freqInMins = 0
+						try {
+							val schedulingFrequencyParts = runFrequency.trim().split(" ")
 
-						val schedulingFrequencyParts = runFrequency.trim().split(" ")
-
-						val freqScalar = schedulingFrequencyParts(0)
-						val freqUnitMeasure = schedulingFrequencyParts(1)
-						val freqInMins = getMins(freqScalar,freqUnitMeasure)
-
+							val freqScalar = schedulingFrequencyParts(0)
+							val freqUnitMeasure = schedulingFrequencyParts(1)
+							freqInMins = getMins(freqScalar, freqUnitMeasure)
+						}
+						catch{
+							case _ => {
+								freqInMins = int("db.internal.tables.requests.def.defaultWaitingTime")
+							}
+						}
+						var runStartMessage = ""
 						if(diffInMinsCurrentStarted > freqInMins){
-							val runStartMessage = "starting the Next Run | previous NOT OK . . ."
-							startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
+							runStartMessage = "starting the Next Run | previous NOT OK . . ."
 						}
 						else{
-							val runStartMessage = "starting the Next Run before next scheduled time | previous NOT OK . . ."
-							startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
+							runStartMessage = "starting the Next Run before next scheduled time | previous NOT OK . . ."
 						}
+						startASpin(host,port,dbname,dbtable,currentDateStr,runStartMessage,request)
 					}
 				}
 				else {

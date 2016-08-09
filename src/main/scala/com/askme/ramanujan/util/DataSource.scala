@@ -43,7 +43,7 @@ Spark data types :
 class DataSource(val config: Config,val conntype: String, val host: String, val alias: String,
 								 val port: String, val user: String, val password: String, val db: String, val table: String,
 								 val bookmark: String, val bookmarkformat: String, val primarykey: String, val fullTableSchema: String,
-								 val hdfsPartitionCol: String,val druidMetrics: String,val druidDims: String, val schedulingFrequency: String,val treatment: String) extends Configurable with Logging with Serializable{
+								 val numOfPartitions: String,val druidMetrics: String,val druidDims: String, val schedulingFrequency: String,val treatment: String) extends Configurable with Logging with Serializable{
 
 
 	def sqlToHiveDataTypeMapping(coltype: String): String = {
