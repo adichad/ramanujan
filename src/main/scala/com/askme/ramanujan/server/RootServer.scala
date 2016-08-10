@@ -18,21 +18,18 @@ import spray.json.{DefaultJsonProtocol, _}
 class RootServer(val config: Config) extends Configurable with Server with Logging with Serializable {
 
 	val conf = sparkConf("spark")
-	val sc: SparkContext = SparkContext.getOrCreate(conf) // ideally this is what one must do - getOrCreate
+	val sc: SparkContext = SparkContext.getOrCreate(conf)
 
 	val customSparkListener: CustomSparkListener = new CustomSparkListener()
 	sc.addSparkListener(customSparkListener)
 
 	val ssc = new StreamingContext(sc, Seconds(int("streaming.kafka.batchDuration")))
 
-	// one sqlContext - to pass on
 	val sqlContext = new SQLContext(sc)
 
-	//create an actorSystem
 	info("creating the actor system == "+string("actorSystem.name"))
 	private implicit val pipelineSystem = ActorSystem(string("actorSystem.name"))
 
-	// the listener, an option sys log class basically - one listener only
 	info("creating the listener actor == "+string("actorSystem.actors.listener"))
 	val listener = pipelineSystem.actorOf(Props(classOf[Listener],config), name = string("actorSystem.actors.listener")) // one listener
 
@@ -50,17 +47,17 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 	//val requestHandlerRef = pipelineSystem.actorOf(Props(classOf[RequestHandler],config,conf,listener,sqlContext), name = string("actorSystem.actors.master"))
 	// take a table in - completely?
 
-	val internalHost = string("db.internal.url") // get the host from env confs - tables bookmark & status mostly
-	val internalPort = string("db.internal.port") // get the port from env confs - tables bookmark & status mostly
-	val internalDB = string("db.internal.dbname") // get the port from env confs - tables bookmark & status mostly
-	val internalUser = string("db.internal.user") // get the user from env confs - tables bookmark & status mostly
-	val internalPassword = string("db.internal.password") // get the password from env confs - tables bookmark & status mostly
+	val internalHost = string("db.internal.url")
+	val internalPort = string("db.internal.port")
+	val internalDB = string("db.internal.dbname")
+	val internalUser = string("db.internal.user")
+	val internalPassword = string("db.internal.password")
 
 	val internalURL: String = string("db.conn.jdbc")+":"+string("db.conn.use")+"://"+internalHost+":"+internalPort+"/"+internalDB+"?zeroDateTimeBehavior=convertToNull" // the internal connection DB <status, bookmark, requests> etc
 
-	def transform(request: String) = {
-		val request_ = request.replaceAll("'","\"") // not needed anymore
-		case class RequestObject(host: String, alias: String, port: String, user: String, password: String, db: String, table: String, bookmark: String, bookmarkformat: String, primaryKey: String, conntype: String,fullTableSchema: String,numOfPartitions: String,druidMetrics: String,druidDims: String,runFrequency: String,treatment: String)
+	def transformDB(request: String) = {
+		val request_ = request.replaceAll("'","\"")
+		case class RequestObject(host: String, port: String, user: String, password: String, db: String, table: String, alias: String, bookmark: String, primaryKey: String, conntype: String,fullTableSchema: String,numOfPartitions: String,toDruid: Boolean,druidMetrics: String,druidDims: String,runFrequency: String,treatment: String)
 
 		object RequestJsonProtocol extends DefaultJsonProtocol {
 			implicit val RequestFormat = jsonFormat17(RequestObject)
@@ -72,25 +69,25 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 		val requestObject = jsonValue.convertTo[RequestObject]
 
-		val host = requestObject.host // e.g 10.0.16.98
+		val host = requestObject.host
+		val port = requestObject.port
+		val user = requestObject.user
+		val password = requestObject.password
+		val db = requestObject.db
+		val table = requestObject.table
 		val alias = requestObject.alias
-		val port = requestObject.port // e.g 3306
-		val user = requestObject.user // e.g jyotishree
-		val password = requestObject.password // e.g getit1234
-		val db = requestObject.db // e.g payments
-		val table = requestObject.table // e.g txn_tab
-		val bookmark = requestObject.bookmark // bookmark key, e.g timestamp
-		val bookmarkformat = requestObject.bookmarkformat // format of bookmark e.g dd-mm-YYYYTHH:MM:SSZ
+		val bookmark = requestObject.bookmark
 		val primaryKey = requestObject.primaryKey // primaryKey
 		val conntype = requestObject.conntype // e.g com.sql.MySQL.driver
 		val fullTableSchema = requestObject.fullTableSchema // fully qualified table schema
 		val numOfPartitions = requestObject.numOfPartitions
+		val toDruid = requestObject.toDruid
 		val druidMetrics = requestObject.druidMetrics
 		val druidDims = requestObject.druidDims
 		val runFrequency = requestObject.runFrequency
 		val treatment = requestObject.treatment
 
-		val dataSource = new DataSource(config,conntype,host,alias,port,user,password,db,table,bookmark,bookmarkformat,primaryKey,fullTableSchema,numOfPartitions,druidMetrics,druidDims,runFrequency,treatment)
+		val dataSource = new DataSource(config,conntype,host,port,user,password,db,table,alias,bookmark,primaryKey,fullTableSchema,numOfPartitions,toDruid,druidMetrics,druidDims,runFrequency,treatment)
 		dataSource
 	}
 
@@ -127,7 +124,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		kafkaSource
 	}
 
-	def getMins(freqScalar: String, freqUnitMeasure: String): Int = {
+	def getTimeDiffInMins(freqScalar: String, freqUnitMeasure: String): Int = {
 		if(freqUnitMeasure.toLowerCase().contains(string("db.internal.tables.requests.defs.min"))){
 			freqScalar.toInt
 		}
@@ -157,12 +154,16 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 		val updateRequestsRunningStatement = connection.createStatement()
 		updateRequestsRunningStatement.executeUpdate(updateRequestsRunningQuery)
 		connection.close()
-		val dataSource = transform(request)
+		val dataSource = transformDB(request)
+
+		val showUpInDruid = dataSource.toDruid
 
 		val workerActor = pipelineSystem.actorOf(Props(classOf[WorkerActor],config))
 		workerActor ! new TableMessage(listener,dataSource,hash)
-		//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
-		//druidActor ! new DruidMessage(listener,dataSource,hash)
+		if(showUpInDruid == true) {
+			//val druidActor = pipelineSystem.actorOf(Props(classOf[DruidActor],config))
+			//druidActor ! new DruidMessage(listener,dataSource,hash)
+		}
 	}
 
 	def startAStream(cluster: String, topic: String, alias: String, groupName: String, currentDateStr: String, runStreamingMessage: String, request: String): Unit = {
@@ -261,7 +262,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 							val freqScalar = schedulingFrequencyParts(0)
 							val freqUnitMeasure = schedulingFrequencyParts(1)
-							freqInMins = getMins(freqScalar, freqUnitMeasure)
+							freqInMins = getTimeDiffInMins(freqScalar, freqUnitMeasure)
 						}
 						catch{
 							case _ => {
@@ -284,7 +285,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 
 					val freqScalar = schedulingFrequencyParts(0).trim()
 					val freqUnitMeasure = schedulingFrequencyParts(1).trim()
-					val freqInMins = getMins(freqScalar,freqUnitMeasure)
+					val freqInMins = getTimeDiffInMins(freqScalar,freqUnitMeasure)
 
 					if(diffInMinsCurrentStarted > freqInMins){
 						val runStartMessage = "starting the Next Run | previous OK . . ."

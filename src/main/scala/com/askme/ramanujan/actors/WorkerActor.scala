@@ -88,7 +88,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
       if(!parentPathExistsBefore){
         hdfs.mkdirs(new Path(parentHDFSPath))
         //val parentTableCreateQuery = "CREATE TABLE IF NOT EXISTS hive_table_tsv_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType()+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' LINES TERMINATED BY '\\n' LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
-        val parentTableCreateQuery = "CREATE EXTERNAL TABLE IF NOT EXISTS hive_table_parquet1_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType(dfSchema)+") PARTITIONED BY (partitioned_on_"+dataSource.hdfsPartitionCol+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
+        val parentTableCreateQuery = "CREATE EXTERNAL TABLE IF NOT EXISTS hive_table_parquet1_"+(dataSource.alias).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.db).replaceAll("[^A-Za-z0-9]", "_")+"_"+(dataSource.table).replaceAll("[^A-Za-z0-9]", "_")+" ("+dataSource.getColAndType(dfSchema)+") PARTITIONED BY (partitioned_on_"+dataSource.primarykey+" STRING) STORED AS PARQUET LOCATION '"+parentHDFSPath+"'" // STORED AS PARQUET LOCATION '"+parentHDFSPath+"'"
         debug("[MY DEBUG STATEMENTS] [CREATE TABLES] [HIVE QUERY] == "+parentTableCreateQuery)
         val hiveCreateTableStmt = hiveCon.createStatement()
         val createTableRes = hiveCreateTableStmt.execute(parentTableCreateQuery)
@@ -155,6 +155,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
 
     val keys: Array[Any] = PKsAffectedDF_partition.select("partition").distinct.collect.flatMap(_.toSeq)
     val byPartitionArray: Array[DataFrame] = keys.map(key => PKsAffectedDF_partition.where($"partition" <=> key))
+
     val dbname = dataSource.db
     val alias = dataSource.alias
     val dbtable = dataSource.table
@@ -202,10 +203,10 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
         //try {
           prevBookMark = dataSource.getPrevBookMark()
           debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the previous bookmark == " + prevBookMark + " ##for## datasource == " + dataSource.toString())
-          currBookMark = dataSource.getCurrBookMark()
+          currBookMark = dataSource.getCurrBookMark(hash)
           debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the current bookmark == " + currBookMark + " ##for## datasource == " + dataSource.toString())
 
-          val PKsAffectedDFSource: DataFrame = dataSource.getAffectedPKs(prevBookMark, currBookMark)
+          val PKsAffectedDFSource: DataFrame = dataSource.getAffectedPKs(prevBookMark, currBookMark, hash)
 
           val affectedPKsCount: Long = PKsAffectedDFSource.count()
           debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} the count of PKs returned == " + affectedPKsCount + "##for## datasource == " + dataSource.toString())
@@ -214,7 +215,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
             info("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} no records to upsert in the internal Status Table == for bookmarks : " + prevBookMark + " ==and== " + currBookMark + " for table == " + dataSource.db + "_" + dataSource.table + " @host@ == " + dataSource.host)
           }
           else {
-            val PKsAffectedDF = dataSource.convertTargetTypes(PKsAffectedDFSource)
+            val PKsAffectedDF = dataSource.convertTargetTypes(PKsAffectedDFSource,hash)
 
             val partitionCol = dataSource.primarykey
             val numOfPartitions = dataSource.numOfPartitions
@@ -228,7 +229,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
                 }
               }
             })
-
+            /*
             if (dataSource.hdfsPartitionCol.isEmpty() || dataSource.hdfsPartitionCol == dataSource.bookmark) {
               debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} picking up the default partition column == " + dataSource.bookmark)
               val partitionCol = dataSource.bookmark
@@ -241,7 +242,8 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
                   }
                 }
               })
-              val PKsAffectedDF_partition = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.bookmark), lit(partitionCol)))
+              */
+              val PKsAffectedDF_partition = PKsAffectedDF.withColumn("partition", partitionColFunc(col(dataSource.primarykey), lit(dataSource.numOfPartitions)))
 
               sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource)
 
@@ -249,7 +251,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
               dataSource.updateInRequestsPassed(hash)
               dataSource.updateBookMark(currBookMark)
               "[MY DEBUG STATEMENTS] run completed."
-            }
+            /*}
             else {
               debug("[MY DEBUG STATEMENTS] [FUTURE] [RUNNING] {{" + hash + "}} picking up the input partition column == " + dataSource.hdfsPartitionCol)
               val partitionCol = dataSource.hdfsPartitionCol
@@ -267,6 +269,7 @@ class WorkerActor(val config: Config) extends Actor with Configurable with Loggi
               sinkKafkaHdfsHive(PKsAffectedDF_partition: DataFrame, dataSource)
               "[MY DEBUG STATEMENTS] run completed."
             }
+            */
           }
       }(ExecutionContext.Implicits.global) onComplete {
         case Success(value) => {
