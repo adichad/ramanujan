@@ -2,18 +2,15 @@ package com.askme.ramanujan.util
 
 import java.sql.{Connection, DriverManager}
 import java.text.SimpleDateFormat
-import java.util.{Calendar, Properties}
+import java.util.Calendar
 
 import com.askme.ramanujan.Configurable
 import com.typesafe.config.Config
 import grizzled.slf4j.Logging
-import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
-import org.apache.spark.sql.types._
+import org.apache.spark.SparkContext
 import org.apache.spark.sql._
-import org.apache.spark.{SparkConf, SparkContext}
-import org.json4s.NoTypeHints
-import org.json4s.jackson.Serialization
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
 
 /*
 SQL data types :
@@ -607,19 +604,13 @@ class DataSource(val config: Config,val conntype: String, val host: String,val p
 		statement.executeUpdate(insertStartLogQuery)
 		internalConnection.close()
 	}
-	// Spark # 1 job stands over.
-	// get the previous bookmark, from bookmark table
+
 	def getPrevBookMark() = { // this strictly returns the actual bookmark, e.g the timestamp
-		debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] entered to obtain the previous bookmark . . . == "+toString())
 		internalConnection = DriverManager.getConnection(internalURL, internalUser, internalPassword) // getting internal DB connection : jdbc:mysql://localhost:3306/<db>
-		debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] got the internal connection . . . == "+toString())
 		val statement = internalConnection.createStatement()
-		debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] executing the statement . . . == "+toString())
 		val prevOffsetFetchQuery = "select "+string("db.internal.tables.bookmarks.cols.dbtablekey")+" as "+string("db.internal.tables.bookmarks.cols.dbtablekey")+",max("+string("db.internal.tables.bookmarks.cols.id")+") as "+string("db.internal.tables.bookmarks.cols.id")+" from "+string("db.internal.tables.bookmarks.name")+" where "+string("db.internal.tables.bookmarks.cols.dbtablekey")+" in (\""+odb+"_"+otable+"\")"
-		debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] prev offset fetch query . . . == "+prevOffsetFetchQuery)
 		var resultSet = statement.executeQuery(prevOffsetFetchQuery) // handle first time cases also
 		if(resultSet.next()){
-			debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous offset] this db_table  has a row . . . == "+toString())
 			val key: String = resultSet.getString(string("db.internal.tables.bookmarks.cols.dbtablekey"))
 			val id: String = resultSet.getString(string("db.internal.tables.bookmarks.cols.id"))
 			val prevBookMarkFetchQuery = "select "+string("db.internal.tables.bookmarks.cols.bookmarkId")+" from "+string("db.internal.tables.bookmarks.name")+" where "+string("db.internal.tables.bookmarks.cols.dbtablekey")+" in (\""+ key +"\") and "+string("db.internal.tables.bookmarks.cols.id")+" in ("+ id +")"
@@ -627,21 +618,13 @@ class DataSource(val config: Config,val conntype: String, val host: String,val p
 			val prevBookMarkstatement = internalConnection.createStatement()
 			resultSet = prevBookMarkstatement.executeQuery(prevBookMarkFetchQuery)
 			if(resultSet.next()){
-				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous bookmark] this db_table  has a row . . . == "+toString())
 				val bookmark = resultSet.getString(string("db.internal.tables.bookmarks.cols.bookmarkId"))
-				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous bookmark] the previous bookmark returned == "+bookmark)
 				internalConnection.close()
 				bookmark
 			}
 			else {
-				debug("[MY DEBUG STATEMENTS] [SQL] [BookMarks] [previous] [NULL] the default one . . . == "+string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue"))
 				internalConnection.close()
-				if(bookmarkformat.toLowerCase() == string("db.internal.tables.bookmarks.defs.defaultDateFormat").toLowerCase){
-					string("db.internal.tables.bookmarks.defs.defaultDateBookMarkValue")
-				}
-				else {
 					string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
-				}
 			}
 		}
 		else {
@@ -650,7 +633,7 @@ class DataSource(val config: Config,val conntype: String, val host: String,val p
 			string("db.internal.tables.bookmarks.defs.defaultIdBookMarkValue")
 		}
 	}
-	// get the current bookmark, from source table
+
 	def getCurrBookMark(hash: String) = {
 		val conf = sparkConf("spark")
 		val sc = SparkContext.getOrCreate(conf)
