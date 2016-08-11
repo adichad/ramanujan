@@ -63,7 +63,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 			implicit val RequestFormat = jsonFormat17(RequestObject)
 		}
 		import RequestJsonProtocol._
-		val jsonValue = request_.parseJson //parequest_.parseJson
+		val jsonValue = request_.parseJson
 
 		debug("[MY DEBUG STATEMENTS] [SQL] [transform json value] == "+jsonValue)
 
@@ -265,7 +265,7 @@ class RootServer(val config: Config) extends Configurable with Server with Loggi
 							freqInMins = getTimeDiffInMins(freqScalar, freqUnitMeasure)
 						}
 						catch{
-							case _ => {
+							case _ : Throwable => {
 								freqInMins = int("db.internal.tables.requests.def.defaultWaitingTime")
 							}
 						}

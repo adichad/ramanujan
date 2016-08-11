@@ -76,17 +76,17 @@ sqlserverport = str(ConfigSectionMap("defaults")['sqlserverport'])
 global mysqlstr, postgresstr, mssqlstr
 
 mysqlstr = str(ConfigSectionMap("defaults")['mysqlstr'])
-postgres = str(ConfigSectionMap("defaults")['postgres'])
-mssql = str(ConfigSectionMap("defaults")['mssql'])
+postgresstr = str(ConfigSectionMap("defaults")['postgresstr'])
+mssqlstr = str(ConfigSectionMap("defaults")['mssqlstr'])
 
 define("port",default=port,help="serve on the given port",type=int)
 define("debug",default=False, help="running in the debug mode")
 
 db_port_map = {}
 db_port_map[mysqlport1] = mysqlstr
-db_port_map[mysqlport2] = mysqlport2
-db_port_map[postgresport] = postgresport
-db_port_map[sqlserverport] = sqlserverport
+db_port_map[mysqlport2] = mysqlstr
+db_port_map[postgresport] = postgresstr
+db_port_map[sqlserverport] = sqlserverstr
 
 def ConfigSectionMap(section):
     dict1 = {}
@@ -223,8 +223,11 @@ class PostRequestHandlerRDBMS(tornado.web.RequestHandler):
         colnames = []
         coltypes = []
         for c in cols:
-            colnames.append(c["colname"])
-            coltypes.append(c["coltype"])
+            try:
+                colnames.append(c["colname"])
+                coltypes.append(c["coltype"])
+            except:
+                print "[MY DEBUG STATEMENTS] col was == "+str(c)
 
         dbtype = db_port_map[str(port)]
         print "[DEBUG] dbtype used == "+dbtype
