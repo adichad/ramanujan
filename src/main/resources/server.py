@@ -1,6 +1,7 @@
 #!/usr/env/python
 """
 server instead of the normal spray routes
+python server.py configForServer.ini
 """
 
 import traceback
@@ -35,6 +36,8 @@ import tornado.escape
 import tornado.web
 import tornado.auth
 
+import ConfigParser
+
 import MySQLdb
 import os.path
 
@@ -42,26 +45,62 @@ import pandas as pd
 
 from datetime import datetime 
 
-define("port",default=9999,help="serve on the given port",type=int)
+config_file = sys.argv[1]
+Config = ConfigParser.ConfigParser()
+Config.read(config_file)
+
+global port, internalhost, internaldbname, internalusername, internalpassword
+
+port = int(ConfigSectionMap("app")['port'])
+internalhost = ConfigSectionMap("db")['internalhost']
+internaldbname = ConfigSectionMap("db")['internaldbname']
+internalusername = ConfigSectionMap("db")['internalusername']
+internalpassword = ConfigSectionMap("db")['internalpassword']
+
+global defaultDateTimeStr, defaultRunState, NoExceptionsStr, NoNotesStr, noInput, Zook
+
+defaultDateTimeStr = ConfigSectionMap("defaults")['defaultDateTimeStr']
+defaultRunState = ConfigSectionMap("defaults")['defaultRunState']
+NoExceptionsStr = ConfigSectionMap("defaults")['NoExceptionsStr']
+NoNotesStr = ConfigSectionMap("defaults")['NoNotesStr']
+noInput = ConfigSectionMap("defaults")['noInput']
+Zook = ConfigSectionMap("defaults")['Zook']
+
+global mysqlport1, mysqlport2, postgresport, sqlserverport 
+
+mysqlport1 = str(ConfigSectionMap("defaults")['mysqlport1'])
+mysqlport2 = str(ConfigSectionMap("defaults")['mysqlport2'])
+postgresport = str(ConfigSectionMap("defaults")['postgresport'])
+sqlserverport = str(ConfigSectionMap("defaults")['sqlserverport'])
+
+global mysqlstr, postgresstr, mssqlstr
+
+mysqlstr = str(ConfigSectionMap("defaults")['mysqlstr'])
+postgres = str(ConfigSectionMap("defaults")['postgres'])
+mssql = str(ConfigSectionMap("defaults")['mssql'])
+
+define("port",default=port,help="serve on the given port",type=int)
 define("debug",default=False, help="running in the debug mode")
 
-internalhost = "analytics.c0wj8qdslqom.ap-southeast-1.rds.amazonaws.com"
-internaldbname = "Ramanujan"
-internalusername = "root"
-internalpassword = "abcd1234"
-
-defaultDateTimeStr = "0001-01-01 00:00:00"
-defaultRunState = "idle"
-NoExceptionsStr = "none"
-NoNotesStr = "none"
-noInput = "none"
-Zook = "0"
-
 db_port_map = {}
-db_port_map['3306'] = "mysql"
-db_port_map['3308'] = "mysql"
-db_port_map['5432'] = "postgres"
-db_port_map['1433'] = "mssql"
+db_port_map[mysqlport1] = mysqlstr
+db_port_map[mysqlport2] = mysqlport2
+db_port_map[postgresport] = postgresport
+db_port_map[sqlserverport] = sqlserverport
+
+def ConfigSectionMap(section):
+    dict1 = {}
+    options = Config.options(section)
+    for option in options:
+        try:
+            dict1[option] = Config.get(section, option)
+            if dict1[option] == -1:
+                DebugPrint("skip: %s" % option)
+        except:
+            traceback.print_exc()
+            print("exception on %s!" % option)
+            dict1[option] = None
+    return dict1
 
 def ss(str_):
     return "'"+str_.replace("'","")+"'"
@@ -405,7 +444,7 @@ class Application(tornado.web.Application):
 def main():
     application = Application()
     http_server = tornado.httpserver.HTTPServer(application)
-    http_server.listen(9999)
+    http_server.listen(port)
 
     tornado.ioloop.IOLoop.instance().start()
 
