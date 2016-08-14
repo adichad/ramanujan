@@ -43,11 +43,25 @@ import os.path
 
 import pandas as pd
 
-from datetime import datetime 
+from datetime import datetime
 
 config_file = sys.argv[1]
 Config = ConfigParser.ConfigParser()
 Config.read(config_file)
+
+def ConfigSectionMap(section):
+    dict1 = {}
+    options = Config.options(section)
+    for option in options:
+        try:
+            dict1[option] = Config.get(section, option)
+            if dict1[option] == -1:
+                DebugPrint("skip: %s" % option)
+        except:
+            traceback.print_exc()
+            print("exception on %s!" % option)
+            dict1[option] = None
+    return dict1
 
 global port, internalhost, internaldbname, internalusername, internalpassword
 
@@ -59,12 +73,12 @@ internalpassword = ConfigSectionMap("db")['internalpassword']
 
 global defaultDateTimeStr, defaultRunState, NoExceptionsStr, NoNotesStr, noInput, Zook
 
-defaultDateTimeStr = ConfigSectionMap("defaults")['defaultDateTimeStr']
-defaultRunState = ConfigSectionMap("defaults")['defaultRunState']
-NoExceptionsStr = ConfigSectionMap("defaults")['NoExceptionsStr']
-NoNotesStr = ConfigSectionMap("defaults")['NoNotesStr']
-noInput = ConfigSectionMap("defaults")['noInput']
-Zook = ConfigSectionMap("defaults")['Zook']
+defaultRunState = ConfigSectionMap("defaults")['defaultrunstate']
+NoExceptionsStr = ConfigSectionMap("defaults")['noexceptionsstr']
+defaultDateTimeStr = ConfigSectionMap("defaults")['defaultdatetimestr']
+NoNotesStr = ConfigSectionMap("defaults")['nonotesstr']
+noInput = ConfigSectionMap("defaults")['noinput']
+Zook = ConfigSectionMap("defaults")['zook']
 
 global mysqlport1, mysqlport2, postgresport, sqlserverport 
 
@@ -86,21 +100,7 @@ db_port_map = {}
 db_port_map[mysqlport1] = mysqlstr
 db_port_map[mysqlport2] = mysqlstr
 db_port_map[postgresport] = postgresstr
-db_port_map[sqlserverport] = sqlserverstr
-
-def ConfigSectionMap(section):
-    dict1 = {}
-    options = Config.options(section)
-    for option in options:
-        try:
-            dict1[option] = Config.get(section, option)
-            if dict1[option] == -1:
-                DebugPrint("skip: %s" % option)
-        except:
-            traceback.print_exc()
-            print("exception on %s!" % option)
-            dict1[option] = None
-    return dict1
+db_port_map[sqlserverport] = mssqlstr
 
 def ss(str_):
     return "'"+str_.replace("'","")+"'"
@@ -125,8 +125,9 @@ class DefaultHandler(tornado.web.RequestHandler):
         list_of_users_username = []
         for r in rt:
             user = str(r[0])
+            print "[DEBUG] User found == "+str(user)
             list_of_users_username.append(user)
-        print "[DEBUG] username keyes in == "+str(username)
+        print "[DEBUG] username keyed in == "+str(username)
         if username not in list_of_users_username:
             retry_message = "the previous login credentials failed. Retry ?"
             self.render("login.html",message = retry_message)
@@ -398,6 +399,7 @@ class LoginHandler(BaseHandler):
         #request = tornado.escape.json_decode(self.request.body)
         getusername = self.get_argument('username')
         getpassword = self.get_argument('password')
+        
         userquery = "select username,password from users;"
         internaldb = MySQLdb.connect(internalhost,internalusername,internalpassword,internaldbname)
         cursor = internaldb.cursor()
@@ -414,9 +416,18 @@ class LoginHandler(BaseHandler):
             list_of_users_username.append(username)
             list_of_users_password.append(password)
 
-        if list_of_users_username.index(getusername) == list_of_users_password.index(getpassword) and list_of_users_password.index(getpassword) != -1 :
-            self.set_secure_cookie("username", username)
-            self.redirect("/Ramanujan/?username="+username)
+        try:
+            u_ind = list_of_users_username.index(getusername)
+        except:
+            u_ind = -1
+        try:
+            p_ind = list_of_users_password.index(getpassword)
+        except:
+            p_ind = -1
+
+        if u_ind == p_ind and p_ind != -1 :
+            self.set_secure_cookie("username", list_of_users_username[u_ind])
+            self.redirect("/Ramanujan?username="+list_of_users_username[u_ind])
             return
         else:
             retry_message = "the previous login credentials failed. Retry ?"
@@ -439,7 +450,7 @@ class Application(tornado.web.Application):
             (r"/api/request/rdbms",PostRequestHandlerRDBMS),
             (r"/api/request/kafka",PostRequestHandlerKAFKA),
             (r"/api/report", PostReportHandler),
-            (r"/Ramanujan/", DefaultHandler),
+            (r"/Ramanujan", DefaultHandler),
             (r"/web/static/(.*)", tornado.web.StaticFileHandler, {"path":"web/static/"})
         ]
         tornado.web.Application.__init__(self,handlers,static_path="web/static",template_path="web/static",login_url="/login",cookie_secret="R7ALZk1rT4OOLE7TdDvuIkPZXq+YgEOznOrXb7RI5Ns=")    

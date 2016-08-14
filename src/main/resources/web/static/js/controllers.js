@@ -1,7 +1,8 @@
 'use strict';
 
 var ramanujanDBCtrl = function($scope,$http) {
-   $scope.cols = [{}];
+   $scope.cols = [];
+   $scope.dbtables = [];
 
   $scope.add_row = function() {
     $scope.cols.push({});
@@ -10,10 +11,49 @@ var ramanujanDBCtrl = function($scope,$http) {
   $scope.delete_row = function(row) {
     $scope.cols.splice(row, 1);
   };
+  $scope.fetchTables=function(alias){
+    console.log("[DEBUG] [REQUEST] fetchtables was called , inside ramanujanDBCtrl . . .")
+    /* thought I would add table fetch and then column fetch code :-) */
+  }
   $scope.sendTable=function(){
       /* while compiling form , angular created this object*/
       console.log("[DEBUG] [REQUEST] sendTable inside ramanujanDBCtrl was called == Requests . . .")
       var data=$scope.table;  
+      if(data.alias === "crm"){
+        data.port = "3306";
+        data.password = "Az8Dg344";
+        data.user = "investopad";
+        data.host = "prod-crm-read5.curnxxtqpaar.ap-southeast-1.rds.amazonaws.com";
+        data.conntype = "com.mysql.jdbc.Driver";
+        data.db = "crmdb_prod";
+      }
+      else if(data.alias === "mpdm"){
+        data.port = "3306";
+        data.password = "Az8Dg344";
+        data.user = "investopad";
+        data.host = "mpdm-3-readreplica.curnxxtqpaar.ap-southeast-1.rds.amazonaws.com";
+        data.conntype = "com.mysql.jdbc.Driver";
+        data.db = "mpdm";
+      }
+      else if(data.alias === "ncrm"){
+        data.port = "3306";
+        data.password = "Az8Dg344";
+        data.user = "investopad";
+        data.host = "prod-ncrm-read.curnxxtqpaar.ap-southeast-1.rds.amazonaws.com";
+        data.conntype = "com.mysql.jdbc.Driver";
+        data.db = "ncrm_prod";
+      }
+      else if(data.alias === "amb"){
+        data.port = "3308";
+        data.password = "jyoti@123";
+        data.user = "jyoti";
+        data.host = "10.100.40.239";
+        data.conntype = "com.mysql.jdbc.Driver";
+        data.db = "live_amb_orders";
+      }
+      else{
+        console.log("[DEBUG] [REQUEST] data alias == "+data.alias)
+      }
       data.cols = $scope.cols;
       console.log("[DEBUG] [REQUEST] just dumping the data json in here == ")
       console.log(data)
@@ -40,7 +80,7 @@ var ramanujanLoginCtrl = function($scope,$http,$location) {
 
 
 var ramanujanKafkaCtrl = function($scope,$http) {
-   $scope.kafkaCols = [{}];
+   $scope.kafkaCols = [];
 
   $scope.add_row_kafka = function() {
     $scope.kafkaCols.push({});

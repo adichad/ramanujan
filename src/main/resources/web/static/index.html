@@ -57,48 +57,21 @@
             <fieldset>
                <legend> New Table Details: </legend>
                <div class="form-group">
-                  <label for="host">Host:</label>
-                  <input type="host" class="form-control" id="host" placeholder="Enter host" data-ng-model="table.host" required>
-               </div>
-               <div class="form-group">
-                  <label for="port">Port:</label>
-                  <input type="port" class="form-control" id="port" placeholder="Enter port" data-ng-model="table.port" required>
-               </div>
-               <div class="form-group">
-                  <label for="user">User:</label>
-                  <input type="user" class="form-control" id="user" placeholder="Enter user" data-ng-model="table.user" required>
-               </div>
-               <div class="form-group">
-                  <label for="password">Pass:</label>
-                  <input type="password" class="form-control" id="password" placeholder="Enter password" data-ng-model="table.password" required>
-               </div>
-               <div class="form-group">
-                  <label for="db">db:</label>
-                  <input type="db" class="form-control" id="db" placeholder="Enter db" data-ng-model="table.db" required>
+                  <label for="alias">Alias:</label>
+                  <select class="form-control" id="alias" data-ng-model="table.alias" onchange="fetchTables(this.value)" required>
+                    <option>crm</option>
+                    <option>amb</option>
+                    <option>mpdm</option>
+                    <option>ncrm</option>
+                  </select>
                </div>
                <div class="form-group">
                   <label for="table">table:</label>
                   <input type="table" class="form-control" id="table" placeholder="Enter table" data-ng-model="table.table" required>
                </div>
                <div class="form-group">
-                  <label for="alias">Alias:</label>
-                  <input type="alias" class="form-control" id="alias" placeholder="Enter Alias for the host above" data-ng-model="table.alias" required>
-               </div>
-               <div class="form-group">
                   <label for="bookmark">bookmark:</label>
                   <input type="bookmark" class="form-control" id="bookmark" placeholder="Enter bookmark" data-ng-model="table.bookmark" required>
-               </div>
-               <div class="form-group">
-                  <label for="primarykey">Primary Key:</label>
-                  <input type="primarykey" class="form-control" id="primarykey" placeholder="Enter Primary Key:" data-ng-model="table.primaryKey" required>
-               </div>
-               <div class="form-group">
-                  <label for="conntype">Connection Type:</label>
-                  <input type="conntype" class="form-control" id="conntype" placeholder="Enter Connection Type:" data-ng-model="table.conntype" required>
-               </div>
-               <div class="form-group">
-                  <label for="partitionCol">HDFS Partition Columns:</label>
-                  <input type="partitionCol" class="form-control" id="partitionCol" placeholder="Enter Full Col to use as partition:" data-ng-model="table.partitionCol">
                </div>
                <div class="form-group">
                   <label for="druidMetrics">Druid Metrics</label>
@@ -110,16 +83,19 @@
                </div>
                <div class="form-group">
                   <label for="runFrequency">Scheduling Frequency</label>
-                  <input type="runFrequency" class="form-control" id="runFrequency" placeholder="Enter the scheduling frequency:" data-ng-model="table.runFrequency" required>
-               </div>
-               <div class="form-group">
-                  <label for="treatment">user type failure treatments : / skip / report / fail / </label>
-                  <input type="treatment" class="form-control" id="treatment" placeholder="Enter the scheduling frequency:" data-ng-model="table.treatment" required>
+                  <select class="form-control" id="runFrequency" data-ng-model="table.runFrequency" required>
+                    <option>15 MINUTES</option>
+                    <option>30 MINUTES</option>
+                    <option>1 HOUR</option>
+                    <option>2 HOURS</option>
+                    <option>12 HOURS</option>
+                    <option>24 HOURS</option>
+                  </select>
                </div>
                <div class="form-group">
                   <div class="row clearfix">
                     <div class="col-md-12 column">
-                      <h3> Enter user defined columns . . .</h3>
+                      <h4> Enter user defined columns . . .</h4>
                       <table class="table table-bordered table-hover">
                         <colgroup>
                           <col span="1" style="width: 50%;" />
@@ -154,10 +130,7 @@
                   </div>
                 </div>
                 <br><br>
-                <div class="checkbox">
-                  <label><input type="checkbox"> Sure ?!?</label>
-                </div>
-                <button type="submit" class="btn btn-default" data-ng-click="sendTable()" data-ng-disabled="form.$invalid">Process !</button>
+                <button type="submit" class="btn btn-default" data-ng-click="sendTable()" data-ng-disabled="form.$invalid">Mirror !</button>
               </fieldset>
             </form>
       </div>
@@ -350,14 +323,17 @@
          </ul>
          <div class="tab-content">
             <div id="yarn" class="tab-pane fade in active">
-               <h3><i>YARN SPARK DRUID</i> <u>Health</u> | <i>Pivot Metabase</i> <u>UIs</u></h3>
-               <div class="container">
-                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Yarn"><button class="btn btn-default" role="button">Yarn</button></a>
-                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Spark"><button class="btn btn-default" role="button">Spark</button></a>
-                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Druid"><button class="btn btn-default" role="button">Druid</button></a>
-                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="Pivot"><button class="btn btn-default" role="button">Pivot</button></a>
-                  <a href="https://en.wikipedia.org/wiki/Indianapolis" name="YMetabase"><button class="btn btn-default" role="button">Metabase</button></a>
-               </div>
+            <div class="container-fluid">
+              <h3>Component Healths | UI Viz. </h3>
+               <ul class="nav nav-pills nav-stacked">
+                  <li class="active"><a href="https://en.wikipedia.org/wiki/Indianapolis" name="Spark">Spark</a></li>
+                  <li><a href="https://en.wikipedia.org/wiki/Indianapolis" name="Yarn">Yarn</a></li>
+                  <li><a href="https://en.wikipedia.org/wiki/Indianapolis" name="Druid">Druid</a></li>
+                  <li><a href="https://en.wikipedia.org/wiki/Indianapolis" name="Pivot">Pivot</a></li>
+                  <li><a href="https://en.wikipedia.org/wiki/Indianapolis" name="Metabase">Metabase</a></li>
+                  <li><a href="https://en.wikipedia.org/wiki/Indianapolis" name="Azkaban">Azkaban</a></li>
+               </ul>
+            </div>
             </div>
             <div id="database" class="tab-pane fade">
                <h3><u>DB Health</u></h3>
@@ -517,23 +493,6 @@
             </a>
          </div>
       </div>
-      <!--
-         <script language="javascript">
-           var i=1;
-         $("#add_row").click(function(){
-         $('#addr'+i).html("<td>"+ (i+1) +"<td><input  name='pass"+i+"' type='text' placeholder='Password'  class='form-control input-md'></td><td><input  name='ip"+i+"' type='text' placeholder='IP'  class='form-control input-md'></td><td><input  name='country"+i+"' type='text' placeholder='Country'  class='form-control input-md'></td><td><input  name='ipDisp"+i+"' type='text' placeholder='IP details'  class='form-control input-md'></td>");
-         
-         $('#tab_logic').append('<tr id="addr'+(i+1)+'"></tr>');
-         i++; 
-         });
-         $("#delete_row").click(function(){
-            if(i>1){
-            $("#addr"+(i-1)).html('');
-            i--;
-            }
-         });
-         </script>
-         -->
       <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
       <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
       <script src="/web/static/js/jquery.js"></script>
