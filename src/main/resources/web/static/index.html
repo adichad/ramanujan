@@ -6,6 +6,7 @@
       <link rel="stylesheet" href="/web/static/css/app.css">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.10.0/css/bootstrap-select.min.css">
       <style>
          .carousel-inner > .item > img,
          .carousel-inner > .item > a > img {
@@ -66,21 +67,20 @@
                </div>
                <div class="form-group">
                   <label for="table">table:</label>
-                  <select class="form-control" id="table" data-ng-options="dbtable as dbtable.table for dbtable in dbtables" data-ng-model="table.table" ng-change="fetchColumns()" required></select>
+                  <select class="form-control" id="table" data-ng-options="dbtable.table as dbtable.table for dbtable in dbtables" data-ng-model="table.table" ng-change="fetchColumns()" required></select>
 
                </div>
                <div class="form-group">
                   <label for="bookmark">bookmark:</label>
-                  <input type="bookmark" class="form-control" id="bookmark" placeholder="Enter bookmark" data-ng-model="table.bookmark" required>
                   <select class="form-control" id="bookmark" data-ng-options="dbtablecol as dbtablecol.column for dbtablecol in dbtablecols" data-ng-model="table.bookmark"  required></select>
                </div>
                <div class="form-group">
                   <label for="druidMetrics">Druid Metrics</label>
-                  <input type="druidMetrics" class="form-control" id="druidMetrics" placeholder="Enter the druid metrics(cols):" data-ng-model="table.druidMetrics">
+                  <select class="form-control" id="druidMetrics" data-ng-options="dbtablecol as dbtablecol.column for dbtablecol in dbtablecols" data-ng-model="table.druidMetrics" ng-multiple="true" multiple></select>
                </div>
                <div class="form-group">
                   <label for="druidDims">Druid Dimensions</label>
-                  <input type="druidDims" class="form-control" id="druidDims" placeholder="Enter the druid dimensions(cols):" data-ng-model="table.druidDims">
+                  <select class="form-control" id="druidDims" data-ng-options="dbtablecol as dbtablecol.column for dbtablecol in dbtablecols" data-ng-model="table.druidDims" ng-multiple="true" multiple></select>
                </div>
                <div class="form-group">
                   <label for="storageFormat">Storage Format</label>
@@ -510,6 +510,7 @@
       </div>
       <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
       <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.10.0/js/bootstrap-select.min.js"></script>
       <script src="/web/static/js/jquery.js"></script>
       <!--<script src="/web/static/js/bootstrap.js"></script>-->
       <script src="/web/static/js/angular.js"></script>

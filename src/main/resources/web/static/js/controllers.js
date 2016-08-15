@@ -26,7 +26,7 @@ var ramanujanDBCtrl = function($scope,$http) {
     var aliasname = $scope.aliasname
     console.log("[DEBUG] Value == "+value)
     console.log("[DEBUG] [REQUEST] fetchColumns was called , inside ramanujanDBCtrl . . .")
-    $http.get("web/static/cols_"+value+"_"+aliasname+".php").then(function (response) { $scope.dbtablecols = Array.from(response.data.columns); })
+    $http.get("web/static/cols_"+$scope.dbtables[value].table+"_"+aliasname+".php").then(function (response) { $scope.dbtablecols = Array.from(response.data.columns); })
     /* thought I would add table fetch and then column fetch code :-) */
   }
   $scope.sendTable=function(){
