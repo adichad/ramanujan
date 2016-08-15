@@ -58,16 +58,16 @@
                <legend> New Table Details: </legend>
                <div class="form-group">
                   <label for="alias">Alias:</label>
-                  <select class="form-control" id="alias" data-ng-model="table.alias" onchange="fetchTables(this.value)" required>
-                    <option>crm</option>
-                    <option>amb</option>
-                    <option>mpdm</option>
-                    <option>ncrm</option>
+                  <select class="form-control" id="alias" data-ng-model="table.alias" ng-change="fetchTables(value)" required>
+                    <option value="crm">crm</option>
+                    <option value="mpdm">mpdm</option>
+                    <option value="ncrm">ncrm</option>
                   </select>
                </div>
                <div class="form-group">
                   <label for="table">table:</label>
-                  <input type="table" class="form-control" id="table" placeholder="Enter table" data-ng-model="table.table" required>
+                  <select class="form-control" id="table" data-ng-model="table.table" onchange="fetchColumns()" required></select>
+                  
                </div>
                <div class="form-group">
                   <label for="bookmark">bookmark:</label>
@@ -82,21 +82,33 @@
                   <input type="druidDims" class="form-control" id="druidDims" placeholder="Enter the druid dimensions(cols):" data-ng-model="table.druidDims">
                </div>
                <div class="form-group">
+                  <label for="storageFormat">Storage Format</label>
+                  <select class="form-control" id="storageFormat" data-ng-model="table.storageFormat" required>
+                    <option value="avro">Avro</option>
+                    <option value="parquet">Parquet</option>
+                    <option value="orc">ORC</option>
+                    <option value="csv">csv</option>
+                    <option value="tsv">tsv</option>
+                  </select>
+               </div>
+               <div class="form-group">
                   <label for="runFrequency">Scheduling Frequency</label>
                   <select class="form-control" id="runFrequency" data-ng-model="table.runFrequency" required>
-                    <option>15 MINUTES</option>
-                    <option>30 MINUTES</option>
-                    <option>1 HOUR</option>
-                    <option>2 HOURS</option>
-                    <option>12 HOURS</option>
-                    <option>24 HOURS</option>
+                    <option value="15 minutes">15 MINUTES</option>
+                    <option value="30 minutes">30 MINUTES</option>
+                    <option value="1 hour">1 HOUR</option>
+                    <option value="2 hours">2 HOURS</option>
+                    <option value="12 hours">12 HOURS</option>
+                    <option value="1 day">1 DAY</option>
+                    <option value="2 days">2 DAYS</option>
+                    <option value="1 week">1 WEEK</option>
                   </select>
                </div>
                <div class="form-group">
                   <div class="row clearfix">
                     <div class="col-md-12 column">
                       <h4> Enter user defined columns . . .</h4>
-                      <table class="table table-bordered table-hover">
+                      <table class="table table-condensed table-hover">
                         <colgroup>
                           <col span="1" style="width: 50%;" />
                           <col span="1" style="width: 50%;" />

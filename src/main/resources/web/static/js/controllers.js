@@ -11,8 +11,16 @@ var ramanujanDBCtrl = function($scope,$http) {
   $scope.delete_row = function(row) {
     $scope.cols.splice(row, 1);
   };
-  $scope.fetchTables=function(alias){
+  $scope.fetchTables=function(){
+    var value = document.getElementById("alias").value
+    console.log("[DEBUG] Value == "+value)
     console.log("[DEBUG] [REQUEST] fetchtables was called , inside ramanujanDBCtrl . . .")
+    $http.get("web/static/tables_"+value+".php").then(function (response) { $scope.dbtables = Array.from(response.data.tables); console.log($scope.dbtables)})
+    /* thought I would add table fetch and then column fetch code :-) */
+  }
+  $scope.fetchColumns=function(){
+    var value = document.getElementById("table").value
+    console.log("[DEBUG] [REQUEST] fetchColumns was called , inside ramanujanDBCtrl . . .")
     /* thought I would add table fetch and then column fetch code :-) */
   }
   $scope.sendTable=function(){
