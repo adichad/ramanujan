@@ -66,12 +66,13 @@
                </div>
                <div class="form-group">
                   <label for="table">table:</label>
-                  <select class="form-control" id="table" data-ng-model="table.table" onchange="fetchColumns()" required></select>
-                  
+                  <select class="form-control" id="table" data-ng-options="dbtable as dbtable.table for dbtable in dbtables" data-ng-model="table.table" ng-change="fetchColumns()" required></select>
+
                </div>
                <div class="form-group">
                   <label for="bookmark">bookmark:</label>
                   <input type="bookmark" class="form-control" id="bookmark" placeholder="Enter bookmark" data-ng-model="table.bookmark" required>
+                  <select class="form-control" id="bookmark" data-ng-options="dbtablecol as dbtablecol.column for dbtablecol in dbtablecols" data-ng-model="table.bookmark"  required></select>
                </div>
                <div class="form-group">
                   <label for="druidMetrics">Druid Metrics</label>
@@ -102,6 +103,8 @@
                     <option value="1 day">1 DAY</option>
                     <option value="2 days">2 DAYS</option>
                     <option value="1 week">1 WEEK</option>
+                    <option value="2 weeks">2 WEEKS</option>
+                    <option value="1 month">1 MONTH</option>
                   </select>
                </div>
                <div class="form-group">

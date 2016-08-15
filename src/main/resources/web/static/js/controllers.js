@@ -3,6 +3,8 @@
 var ramanujanDBCtrl = function($scope,$http) {
    $scope.cols = [];
    $scope.dbtables = [];
+   $scope.dbtablecols = [];
+   $scope.aliasname = "";
 
   $scope.add_row = function() {
     $scope.cols.push({});
@@ -14,13 +16,17 @@ var ramanujanDBCtrl = function($scope,$http) {
   $scope.fetchTables=function(){
     var value = document.getElementById("alias").value
     console.log("[DEBUG] Value == "+value)
+    $scope.aliasname = value
     console.log("[DEBUG] [REQUEST] fetchtables was called , inside ramanujanDBCtrl . . .")
-    $http.get("web/static/tables_"+value+".php").then(function (response) { $scope.dbtables = Array.from(response.data.tables); console.log($scope.dbtables)})
+    $http.get("web/static/tables_"+value+".php").then(function (response) { $scope.dbtables = Array.from(response.data.tables); })
     /* thought I would add table fetch and then column fetch code :-) */
   }
   $scope.fetchColumns=function(){
     var value = document.getElementById("table").value
+    var aliasname = $scope.aliasname
+    console.log("[DEBUG] Value == "+value)
     console.log("[DEBUG] [REQUEST] fetchColumns was called , inside ramanujanDBCtrl . . .")
+    $http.get("web/static/cols_"+value+"_"+aliasname+".php").then(function (response) { $scope.dbtablecols = Array.from(response.data.columns); })
     /* thought I would add table fetch and then column fetch code :-) */
   }
   $scope.sendTable=function(){

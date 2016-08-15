@@ -49,6 +49,9 @@ config_file = sys.argv[1]
 Config = ConfigParser.ConfigParser()
 Config.read(config_file)
 
+def ss(str_):
+    return "'"+str_.replace("'","")+"'"
+
 def ConfigSectionMap(section):
     dict1 = {}
     options = Config.options(section)
@@ -89,16 +92,39 @@ for alloweddb in alloweddbs_list:
     all_tables_list = all_tables_result.fetchall()
     arr_of_table_jsons = []
     for table in all_tables_list:
-        d_to_insert = {}
-        tablename = tuple(table)[0]
-        print "[DEBUG] the table being inserted == "+str(tablename)
-        d_to_insert["table"] = tablename
-        arr_of_table_jsons.append(d_to_insert)
+        try:
+            arr_of_col_table_jsons = []
+            tablename = tuple(table)[0]
+            coutname = 'web/static/cols_'+tablename+'_'+alloweddb+'.php'
+            desc_table_query = "desc `"+str(tablename)+"`"
+            desc_table_result = dbconn.execute(desc_table_query)
+            desc_table_list = desc_table_result.fetchall()
+            print "[DEBUG] the table being inserted == "+str(tablename)
+            for colspec in desc_table_list:
+                colspec = tuple(colspec)
+                colname = str(colspec[0])
+                c_to_insert = {}
+                c_to_insert["column"] = colname
+                arr_of_col_table_jsons.append(c_to_insert)
+            big_fat_tablecols_dict = {}
+            big_fat_tablecols_dict["columns"] = arr_of_col_table_jsons
+
+            with open(coutname, 'w') as coutfile:
+                json.dump(big_fat_tablecols_dict, coutfile, sort_keys = True, indent = 4, ensure_ascii=False)
+            coutfile.close()
+
+            if "'PRI'" in [ss(x.strip()) for x in str(desc_table_list).split(',')]:
+                d_to_insert = {}
+                d_to_insert["table"] = tablename
+                arr_of_table_jsons.append(d_to_insert)
+        except:
+            traceback.print_exc()
+            print "[DEBUG] table could not be inserted == "+str(tablename)+" inside db name == "+str(alloweddb)
     big_fat_dbtables_dict = {}
     big_fat_dbtables_dict["tables"] = arr_of_table_jsons
 
-    with open(foutname, 'w') as outfile:
-        json.dump(big_fat_dbtables_dict, outfile, sort_keys = True, indent = 4, ensure_ascii=False)
+    with open(foutname, 'w') as foutfile:
+        json.dump(big_fat_dbtables_dict, foutfile, sort_keys = True, indent = 4, ensure_ascii=False)
     
-    outfile.close()
+    foutfile.close()
     dbconn.close()
